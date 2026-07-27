@@ -4,6 +4,8 @@ A visual colour-grading tool that turns a photo into a `.cube` 3D LUT you can lo
 
 Free for personal and non-commercial use ([CC BY-NC 4.0](LICENSE)) — see the Licence section below.
 
+**[Use LUTsmith now — no download needed](https://xkalin1990.github.io/LutSmith/index.html)**
+
 Grade an image with familiar controls, watch the result live, then export the grade as a standard LUT file. Free and entirely offline: it's a single HTML file with no build step, no server, no account, and no network calls.
 
 ## Quick start
@@ -16,7 +18,7 @@ cd LutSmith
 # open lutsmith.html in any modern browser
 ```
 
-Or use the hosted version at `https://xkalin1990.github.io/LutSmith/index.html`
+Or use it straight in your browser, no download needed: **https://xkalin1990.github.io/LutSmith/index.html**
 
 Because everything runs locally in the browser, your photos are never uploaded anywhere.
 
