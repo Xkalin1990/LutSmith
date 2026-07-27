@@ -780,12 +780,15 @@ function render(){
         positionWipe();
       }
     }
-    // Clipping overlay always runs LAST so it sits on top of everything
+    // Overlays are isolated: a fault in one must never abort the rest of the
+    // frame (that would silently freeze the histogram and thumbnails too).
     if($("clipOn").checked){
-      drawClipping(out,wipeX,$("wipeOn").checked);
+      try{drawClipping(out,wipeX,$("wipeOn").checked);}catch(err){console.error("clipping overlay:",err);}
     }
-    if($("scopeOn").checked)drawHisto(out);
-    scheduleThumbs(plut,N);
+    if($("scopeOn").checked){
+      try{drawHisto(out);}catch(err){console.error("histogram:",err);}
+    }
+    try{scheduleThumbs(plut,N);}catch(err){console.error("thumbnails:",err);}
   });
 }
 function applyLut(src,plut,N){
@@ -1494,17 +1497,22 @@ function applyGradeData(p){
 let history=[],hpos=-1,restoring=false;
 function snapshot(){
   const g=buildGradeData();
-  g.baseLUT=baseLUT?{size:baseLUT.size,data:Array.from(baseLUT.data),name:baseLUT.name}:null;
+  // Keep the heavy base-LUT samples OUT of the serialised snapshot: a 65-point
+  // cube is ~800k numbers (~7 MB of JSON) and would otherwise be duplicated into
+  // all 60 history entries. We store the live object by reference instead and
+  // only record its identity in the string, so undo/redo stays instant.
+  delete g.baseLUT;
   g.baseOn=baseOn;
-  return JSON.stringify(g);
+  g.baseRef=baseLUT?baseLUT.name+"|"+baseLUT.size:null;
+  return {s:JSON.stringify(g),base:baseLUT};
 }
-function restoreSnap(str){
-  const g=JSON.parse(str);
+function restoreSnap(entry){
+  const g=JSON.parse(entry.s);
   restoring=true;
-  if(g.baseLUT){
-    baseLUT={size:g.baseLUT.size,data:Float32Array.from(g.baseLUT.data),name:g.baseLUT.name};
+  if(entry.base){
+    baseLUT=entry.base;
     baseOn=g.baseOn!==false;$("baseEnable").checked=baseOn;
-    $("basename").textContent=g.baseLUT.name+" ("+g.baseLUT.size+"\u00B3)";
+    $("basename").textContent=baseLUT.name+" ("+baseLUT.size+"\u00B3)";
     $("baseinfo").style.display="block";
   }else{baseLUT=null;$("baseinfo").style.display="none";}
   applyGradeData(g);
@@ -1514,7 +1522,7 @@ function restoreSnap(str){
 function pushHistory(){
   if(restoring)return;
   const snap=snapshot();
-  if(hpos>=0&&history[hpos]===snap)return;
+  if(hpos>=0&&history[hpos].s===snap.s&&history[hpos].base===snap.base)return;
   history=history.slice(0,hpos+1);
   history.push(snap);
   if(history.length>60)history.shift();
