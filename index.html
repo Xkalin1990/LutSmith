@@ -1,0 +1,2099 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUTsmith — visual LUT designer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Archivo:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bath:#101312;
+    --panel:#171a19;
+    --panel2:#1f2322;
+    --panel3:#272b29;
+    --line:#30352f;
+    --line-hi:#454c43;
+    --film:#0a0c0a;
+    --text:#edeae0;
+    --dim:#9aa098;
+    --faint:#646b62;
+    --orange:#e08537;
+    --orange-hi:#f6a352;
+    --orange-dim:#7a4f28;
+    --ring:rgba(224,133,55,.45);
+    --red:#e8604c;
+    --track:#2a2f2c;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+    --body:"Archivo","Segoe UI",system-ui,sans-serif;
+    --display:"Bricolage Grotesque",var(--body);
+    --r:5px;
+    --r-sm:3px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bath);color:var(--text);font:14px/1.5 var(--body);display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--bath))}
+  header h1{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:.005em;line-height:1}
+  header h1 span{color:var(--orange)}
+  header p{color:var(--dim);font-size:12px}
+  header .spacer{flex:1}
+  header button{background:var(--panel2);border:1px solid var(--line);color:var(--dim);padding:6px 12px;border-radius:var(--r-sm);cursor:pointer;font:11px var(--mono);text-transform:uppercase;letter-spacing:.07em;transition:background .12s,border-color .12s,color .12s}
+  header button:hover:not(:disabled){color:var(--text);border-color:var(--line-hi);background:var(--panel3)}
+  header button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring)}
+  header button:disabled{opacity:.4;cursor:default}
+  main{flex:1;display:flex;min-height:0}
+  #stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;gap:10px;min-width:0}
+  #drop{border:1px dashed var(--line);border-radius:6px;padding:50px 40px;text-align:center;color:var(--dim);cursor:pointer;transition:.2s;max-width:480px}
+  #drop:hover,#drop.over{border-color:var(--orange);color:var(--text)}
+  #drop strong{color:var(--text);display:block;margin-bottom:6px;font-size:15px}
+  #drop .or{margin-top:14px;font-size:12px}
+  #drop .or button{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px 12px;border-radius:3px;cursor:pointer;font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-top:6px}
+  #droperr{color:var(--red);font-size:12px;margin-top:8px;display:none}
+  #filmframe{display:none;background:var(--film);border-radius:3px;padding:0 16px;max-width:100%;box-shadow:0 14px 44px rgba(0,0,0,.55)}
+  .sprockets{height:16px;background-image:radial-gradient(3.2px 4.2px at 50% 50%,var(--bath) 97%,transparent 100%);background-size:19px 16px;background-repeat:repeat-x;background-position:center}
+  .rebate{display:flex;justify-content:space-between;gap:12px;font:10px/1 var(--mono);letter-spacing:.16em;color:var(--orange);padding:1px 2px 5px;text-transform:uppercase}
+  #viewwrap{position:relative;max-width:100%;width:fit-content;margin:0 auto}
+  canvas#view{max-width:100%;max-height:52vh;display:block;cursor:ew-resize}
+  #wipeline{position:absolute;top:0;bottom:0;width:2px;background:var(--orange-hi);display:none;pointer-events:none}
+  #wipeline::after{content:"◂ original · graded ▸";position:absolute;top:6px;left:6px;font:9px var(--mono);letter-spacing:.08em;color:var(--orange-hi);white-space:nowrap;background:rgba(12,11,8,.75);padding:3px 6px;border-radius:2px}
+  #stagebar{display:none;gap:14px;align-items:center;color:var(--dim);font-size:12px;flex-wrap:wrap;justify-content:center}
+  #stagebar button{background:var(--panel2);border:1px solid var(--line);color:var(--dim);padding:6px 12px;border-radius:var(--r-sm);cursor:pointer;font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;transition:background .12s,border-color .12s,color .12s}
+  #stagebar button:hover{color:var(--text);border-color:var(--line-hi);background:var(--panel3)}
+  #stagebar button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring)}
+  #stagebar label{display:flex;gap:5px;align-items:center;cursor:pointer}
+  #stagebar input[type=checkbox]{accent-color:var(--orange);width:14px;height:14px}
+  #thumbs{display:none;gap:2px;max-width:100%;overflow-x:auto;padding:7px 10px;background:var(--film);border-radius:3px}
+  #thumbs .thumb{position:relative;flex-shrink:0;line-height:0}
+  #thumbs canvas{height:54px;cursor:pointer;border:2px solid transparent;border-radius:0;display:block}
+  #thumbs .thumb.on canvas{border-color:var(--orange)}
+  #thumbs .thumb .tdel{position:absolute;top:2px;right:2px;width:16px;height:16px;border:none;border-radius:2px;background:rgba(12,11,8,.78);color:var(--text);font:11px/1 var(--mono);cursor:pointer;opacity:0;transition:opacity .12s;display:flex;align-items:center;justify-content:center}
+  #thumbs .thumb:hover .tdel{opacity:1}
+  #thumbs .thumb .tdel:hover{background:var(--red);color:var(--film)}
+  #thumbs,aside{scrollbar-width:thin;scrollbar-color:var(--orange) var(--panel)}
+  #thumbs::-webkit-scrollbar{height:8px}
+  aside::-webkit-scrollbar{width:8px}
+  #thumbs::-webkit-scrollbar-track,aside::-webkit-scrollbar-track{background:var(--panel);border-radius:4px}
+  #thumbs::-webkit-scrollbar-thumb,aside::-webkit-scrollbar-thumb{background:#7a4a22;border-radius:4px;border:1px solid var(--panel)}
+  #thumbs::-webkit-scrollbar-thumb:hover,aside::-webkit-scrollbar-thumb:hover{background:var(--orange)}
+  #scopes{display:none;gap:10px;align-items:flex-end}
+  #scopes canvas{border:1px solid var(--line);border-radius:3px;background:#0d0c09}
+  aside{width:348px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column}
+  section{padding:16px 20px;border-bottom:1px solid var(--line)}
+  section h2{font:600 10px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--orange);margin-bottom:14px;padding-bottom:2px}
+  section h2::before{content:"";display:inline-block;width:5px;height:5px;background:var(--orange);border-radius:1px;margin-right:8px;vertical-align:middle}
+  .row{display:flex;align-items:center;gap:11px;margin-bottom:11px}
+  .row:last-of-type{margin-bottom:2px}
+  .row label{flex:0 0 92px;font-size:12px;color:var(--dim);letter-spacing:.01em}
+  .row input[type=range]{flex:1 1 0;min-width:0;height:18px;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer}
+  .row input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--track)}
+  .row input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--track)}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:var(--orange);border:2px solid var(--panel);margin-top:-5px;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:background .12s,transform .12s}
+  .row input[type=range]::-webkit-slider-thumb:hover{background:var(--orange-hi);transform:scale(1.12)}
+  .row input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--orange);border:2px solid var(--panel);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  .row input[type=range]:focus-visible{outline:none}
+  .row input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px var(--ring)}
+  .row input[type=range]:focus-visible::-moz-range-thumb{box-shadow:0 0 0 4px var(--ring)}
+  .row .num{flex:0 0 54px;min-width:54px;text-align:right;font:12px var(--mono);background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:var(--r-sm);padding:4px 6px;-moz-appearance:textfield;transition:border-color .12s,box-shadow .12s}
+  .row .num::-webkit-outer-spin-button,.row .num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .row .num:focus{border-color:var(--orange);outline:none;box-shadow:0 0 0 3px var(--ring)}
+  .row input[type=color]{flex:0 0 34px;width:34px;height:24px;border:1px solid var(--line);border-radius:var(--r-sm);background:none;padding:0;cursor:pointer;-webkit-appearance:none;-moz-appearance:none;appearance:none;overflow:hidden;transition:border-color .12s}
+  .row input[type=color]:hover{border-color:var(--line-hi)}
+  .row input[type=color]:focus-visible{border-color:var(--orange);outline:none;box-shadow:0 0 0 3px var(--ring)}
+  .row input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+  .row input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
+  .row input[type=color]::-moz-color-swatch{border:none;border-radius:2px}
+  .presets,.chtabs{display:flex;flex-wrap:wrap;gap:6px}
+  .presets button,.chtabs button,.btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:7px 11px;border-radius:var(--r-sm);cursor:pointer;font:11px var(--mono);letter-spacing:.03em;transition:background .12s,border-color .12s,color .12s}
+  .presets button:hover,.btn:hover{border-color:var(--line-hi);background:var(--panel3)}
+  .presets button:active,.btn:active{background:var(--panel2)}
+  .presets button:focus-visible,.chtabs button:focus-visible,.btn:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring);border-color:var(--orange)}
+  .chtabs{margin-bottom:10px}
+  .chtabs button.on{border-color:var(--orange);color:var(--orange-hi);background:var(--panel3)}
+  #curves{width:100%;border:1px solid var(--line);border-radius:3px;background:var(--panel2);cursor:crosshair;touch-action:none}
+  .tiny{color:var(--faint);font-size:11px;margin-top:8px;line-height:1.5}
+  #looksDD{position:relative;margin-top:10px}
+  #looksToggle{width:100%;display:flex;justify-content:space-between;align-items:center;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:8px 10px;border-radius:3px;cursor:pointer;font:12px var(--mono)}
+  #looksToggle:hover{border-color:var(--orange)}
+  #looksToggle .caret{color:var(--orange);transition:transform .15s}
+  #looksDD.open #looksToggle{border-color:var(--orange)}
+  #looksDD.open .caret{transform:rotate(180deg)}
+  #looksPanel{display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--panel);border:1px solid var(--orange);border-radius:3px;max-height:230px;overflow-y:auto;padding:4px;box-shadow:0 10px 28px rgba(0,0,0,.5)}
+  #looksDD.open #looksPanel{display:flex;flex-direction:column;gap:4px}
+  .look{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:6px 8px}
+  .look:hover{border-color:var(--orange)}
+  .look .lname{flex:1;font:12px var(--mono);color:var(--text);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .look .ltype{font:9px var(--mono);letter-spacing:.1em;color:var(--orange);text-transform:uppercase;flex-shrink:0}
+  .look .ldel{background:none;border:none;color:var(--dim);cursor:pointer;font:13px var(--mono);padding:0 2px;flex-shrink:0}
+  .look .ldel:hover{color:var(--red)}
+  #looksEmpty{color:var(--dim);font-size:11px;margin-top:8px}
+  .strip{width:100%;border:1px solid var(--line);border-radius:3px;touch-action:none;cursor:ns-resize;margin-bottom:4px}
+  footer{padding:18px 20px;margin-top:auto;background:linear-gradient(0deg,var(--panel),transparent)}
+  #lutname{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:8px 10px;border-radius:3px;margin-bottom:10px;font:13px var(--mono)}
+  #lutname:focus{border-color:var(--orange);outline:none;box-shadow:0 0 0 3px var(--ring)}
+  .exprow{display:flex;gap:8px;margin-bottom:10px}
+  .exprow select{flex:0 0 110px;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:8px;border-radius:3px;font:12px var(--mono)}
+  #export{flex:1;background:var(--orange);border:none;color:var(--film);font:600 13px var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:12px;border-radius:var(--r-sm);cursor:pointer;transition:background .12s,box-shadow .12s;box-shadow:0 2px 8px rgba(224,133,55,.18)}
+  #export:hover{background:var(--orange-hi);box-shadow:0 3px 14px rgba(224,133,55,.3)}
+  #export:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring)}
+  #export:disabled{background:#7a4a22;cursor:not-allowed}
+  .hint{color:var(--dim);font-size:11px;margin-top:8px;text-align:center}
+  .reset{background:none;border:none;color:var(--dim);font:11px var(--mono);cursor:pointer;text-decoration:underline;margin-left:auto;margin-right:18px;text-transform:lowercase;position:relative;z-index:2}
+  .toggle{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--dim);cursor:pointer;margin-bottom:8px}
+  .toggle input{accent-color:var(--orange)}
+  #baseinfo{font:11px var(--mono);color:var(--orange);display:none;margin-top:4px}
+  #baseinfo button{background:none;border:none;color:var(--dim);text-decoration:underline;cursor:pointer;font:11px var(--mono)}
+  aside section h2{cursor:pointer;user-select:none;display:flex;align-items:center}
+  aside section h2::after{content:"\25BE";margin-left:12px;color:var(--dim);transition:transform .15s;flex-shrink:0}
+  aside section h2 .reset{margin-right:0}
+  aside section.closed h2{margin-bottom:0}
+  aside section h2::after{transform:rotate(-90deg)}
+  aside section.closed > *:not(h2){display:none}
+  #abwrap{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  #abwrap button{background:var(--panel2);border:none;color:var(--dim);padding:5px 11px;cursor:pointer;font:11px var(--mono)}
+  #abwrap button+button{border-left:1px solid var(--line)}
+  #abwrap button.on{background:var(--orange);color:var(--film)}
+  #abwrap button:hover:not(.on){color:var(--text)}
+  #view.picking{cursor:crosshair}
+  .pickbtn.on{border-color:var(--orange);color:var(--orange-hi)}
+  #secSwatch{width:22px;height:22px;border-radius:3px;border:1px solid var(--line);flex-shrink:0}
+  .look .lswatch{display:flex;gap:1px;flex-shrink:0}
+  .look .lswatch i{width:9px;height:14px;display:block}
+  .strengthrow{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .strengthrow label{flex:0 0 92px;font-size:12px;color:var(--dim)}
+  .strengthrow input[type=range]{flex:1;accent-color:var(--orange)}
+  #exportPack{width:100%;margin-top:8px;background:none;border:1px solid var(--line);color:var(--dim);padding:8px;border-radius:3px;cursor:pointer;font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em}
+  #exportPack:hover{border-color:var(--orange);color:var(--text)}
+  /* --- colour-balance wheels --- */
+  .cbwheels{display:flex;gap:6px;justify-content:space-between;margin:2px 0 6px}
+  .cbwheel-wrap{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+  .cbwheel{width:96px;height:96px;aspect-ratio:1/1;border:1px solid var(--line);border-radius:50%;cursor:crosshair;touch-action:none;background:#0a0a0a;display:block}
+  .cbwheel-label{font:9px var(--mono);color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
+  /* --- cube analysis (heat-slice + histograms) --- */
+  #cubePanelWrap{margin-top:4px}
+  #cubePanelWrap .panel-title{font:600 10px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--orange);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
+  #cubePanelWrap .panel-title .refr{background:none;border:1px solid var(--line);color:var(--dim);font:10px var(--mono);padding:2px 6px;border-radius:2px;cursor:pointer;letter-spacing:.05em}
+  #cubePanelWrap .panel-title .refr:hover{border-color:var(--orange);color:var(--text)}
+  #cubeHeat{width:170px;height:170px;border:1px solid var(--line);border-radius:3px;background:#0d0c09;display:block;margin:2px auto 0;image-rendering:pixelated}
+  .cubeHistRow{display:flex;gap:8px;margin-top:8px}
+  .cubeHistRow canvas{flex:1;min-width:0;border:1px solid var(--line);border-radius:3px;background:#0d0c09;height:60px}
+  #cubeStats{font:11px var(--mono);color:var(--dim);margin-top:8px;line-height:1.65}
+  #cubeStats b{color:var(--orange);font-weight:500}
+  .cubemini{display:flex;gap:4px;margin-top:8px}
+  .cubemini div{flex:1;height:18px;border:1px solid var(--line);border-radius:2px;position:relative}
+  .cubemini div::after{content:attr(data-in);position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font:9px var(--mono);color:#000;text-shadow:0 0 2px #fff,0 0 2px #fff;letter-spacing:.04em}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+  @media (max-width:760px){main{flex-direction:column}aside{width:100%;border-left:none;border-top:1px solid var(--line)}#stage{min-height:42vh}}
+</style>
+</head>
+<body>
+<header>
+  <h1>LUT<span>smith</span></h1>
+  <p>Design a colour grade on your photo, export a camera-ready 33-point LUT</p>
+  <span class="spacer"></span>
+  <button id="undoBtn" title="Undo (Ctrl/Cmd+Z)" disabled>↶ Undo</button>
+  <button id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)" disabled>↷ Redo</button>
+  <button id="resetAll" title="Reset every adjustment">⟲ Reset all</button>
+  <button id="saveProj">Save project</button>
+  <button id="loadProj">Load project</button>
+  <input type="file" id="projfile" accept=".json,application/json" hidden>
+</header>
+<main>
+  <div id="stage">
+    <div id="drop">
+      <strong>Drop one or more photos here</strong>
+      or click to choose example images. They never leave your device.
+      <div class="or">No photo to hand?<br><button id="chartbtn1" type="button">Use the built-in test chart</button></div>
+      <div id="droperr"></div>
+      <input type="file" id="file" accept="image/*" multiple hidden>
+    </div>
+    <div id="filmframe">
+      <div class="sprockets"></div>
+      <div class="rebate"><span>LUTsmith · colour lab</span><span id="rebatename">MY_GRADE ▸ 33</span></div>
+      <div id="viewwrap">
+        <canvas id="view"></canvas>
+        <div id="wipeline"></div>
+      </div>
+      <div class="sprockets" style="margin-top:6px"></div>
+    </div>
+    <div id="thumbs"></div>
+    <div id="scopes">
+      <canvas id="histo" width="220" height="80" title="RGB histogram of the graded image"></canvas>
+    </div>
+    <div id="stagebar">
+      <span id="comparehint">Hold on the image to compare</span>
+      <label><input type="checkbox" id="wipeOn"> Split compare</label>
+      <label><input type="checkbox" id="clipOn"> Clipping warnings</label>
+      <label><input type="checkbox" id="scopeOn" checked> Histogram</label>
+      <span id="abwrap" title="A/B grade slots">
+        <button id="slotA" class="on">A</button><button id="slotB">B</button><button id="slotCopy" title="Copy current grade to the other slot">copy →</button>
+      </span>
+      <button id="removephoto">Remove photo</button>
+      <button id="savephoto">Save graded photo</button>
+      <button id="newimg">Add photos</button>
+      <button id="chartbtn2">Test chart</button>
+    </div>
+  </div>
+
+  <aside>
+    <section>
+      <h2>Source</h2>
+      <label class="toggle"><input type="checkbox" id="logMode"> Source is log footage (V-Log style) — bake log → Rec.709 into the LUT</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="importLut">Import .cube as base…</button>
+        <input type="file" id="lutfile" accept=".cube" hidden>
+      </div>
+      <div id="baseinfo"><label class="toggle" style="margin:0 0 4px"><input type="checkbox" id="baseEnable" checked> Use base LUT</label>Base LUT: <span id="basename"></span> <button id="baseclear">remove</button></div>
+      <p class="tiny">The log conversion is an approximation of the V-Log curve; fine-tune with exposure and curves.</p>
+    </section>
+
+    <section>
+      <h2>Starting looks</h2>
+      <div class="presets">
+        <button data-p="neutral">Neutral</button>
+        <button data-p="portra400">Portra 400</button>
+        <button data-p="ektar100">Ektar 100</button>
+        <button data-p="gold200">Gold 200</button>
+        <button data-p="kodachrome64">Kodachrome 64</button>
+        <button data-p="velvia50">Velvia 50</button>
+        <button data-p="provia100f">Provia 100F</button>
+        <button data-p="pro400h">Pro 400H</button>
+        <button data-p="superia400">Superia 400</button>
+        <button data-p="cinestill800t">CineStill 800T</button>
+        <button data-p="trix400">Tri-X 400</button>
+        <button data-p="hp5">HP5 Plus</button>
+      </div>
+      <p class="tiny">Approximate emulations of classic 35mm stocks — use as a base, then refine.</p>
+    </section>
+
+    <section>
+      <h2>Cube analysis</h2>
+      <div id="cubePanelWrap">
+        <div class="panel-title">
+          <span id="cubePanelLabel">Output 17³ preview</span>
+          <button class="refr" id="cubePanelSize" title="Cycle preview resolution">17³</button>
+        </div>
+        <canvas id="cubeHeat" width="170" height="170"></canvas>
+        <div class="cubeHistRow">
+          <canvas id="cubeHistL" width="110" height="60" title="Luma distribution"></canvas>
+          <canvas id="cubeHistRgb" width="180" height="60" title="Per-channel output"></canvas>
+        </div>
+        <div id="cubeStats"></div>
+        <div class="cubemini" id="cubeMiniSwatches"></div>
+        <p class="tiny">The heat slice shows the cube at green = mid; histograms show the distribution of all outputs. Updates as you grade.</p>
+      </div>
+    </section>
+
+    <section class="closed">
+      <h2>Extract look from photo</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="exSingle">Estimate from one photo…</button>
+        <input type="file" id="exSingleF" accept="image/*" hidden>
+      </div>
+      <p class="tiny">Single-photo mode analyses tone, white balance, saturation and split toning, then sets the controls to approximate that look — a starting point to refine.</p>
+    </section>
+
+    <section>
+      <h2>My looks</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="saveLook">Save current look</button>
+        <button class="btn" id="addLookCube">Add .cube file…</button>
+        <input type="file" id="lookCubeFile" accept=".cube" hidden>
+      </div>
+      <div id="looksDD">
+        <button id="looksToggle" type="button"><span id="looksCount">Saved looks (0)</span><span class="caret">▾</span></button>
+        <div id="looksPanel">
+          <div id="looksList" style="display:flex;flex-direction:column;gap:4px"></div>
+          <p id="looksEmpty" style="padding:6px 4px">Nothing saved yet. Save the current grade, or add .cube files to keep them to hand.</p>
+        </div>
+      </div>
+      <p class="tiny">Pick a look from the list to apply it. Looks are stored in this browser.</p>
+    </section>
+
+    <section>
+      <h2>Tone <button class="reset" id="toneReset">reset</button></h2>
+      <div class="row"><label>Exposure</label><input type="range" id="exposure" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Contrast</label><input type="range" id="contrast" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Highlights</label><input type="range" id="highlights" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Shadows</label><input type="range" id="shadows" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Blacks</label><input type="range" id="blacks" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Gamma</label><input type="range" id="gamma" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Fade blacks</label><input type="range" id="fade" min="0" max="100" value="0"><input type="number" class="num" value="0"></div>
+    </section>
+
+    <section>
+      <h2>Colour <button class="reset" id="colReset">reset</button></h2>
+      <div class="row"><label>Temperature</label><input type="range" id="temp" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Tint</label><input type="range" id="tint" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Saturation</label><input type="range" id="sat" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Vibrance</label><input type="range" id="vib" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Protect skin</label><input type="range" id="skin" min="0" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <button class="btn pickbtn" id="wbPick">⌖ White balance picker — tap a neutral in the photo</button>
+    </section>
+
+    <section>
+      <h2>Curves <button class="reset" id="curveReset">reset channel</button></h2>
+      <div class="chtabs">
+        <button data-ch="m" class="on">RGB</button>
+        <button data-ch="r">Red</button>
+        <button data-ch="g">Green</button>
+        <button data-ch="b">Blue</button>
+      </div>
+      <canvas id="curves" width="300" height="210"></canvas>
+      <p class="tiny">Click to add a point, drag to shape, double-click a point to remove it.</p>
+    </section>
+
+    <section>
+      <h2>Hue vs hue <button class="reset" id="hueReset">reset</button></h2>
+      <canvas id="huecv" class="strip" width="300" height="100"></canvas>
+      <p class="tiny">Drag a handle to rotate that hue (±60°).</p>
+    </section>
+
+    <section class="closed">
+      <h2>Hue vs saturation <button class="reset" id="hsReset">reset</button></h2>
+      <canvas id="hscv" class="strip" width="300" height="100"></canvas>
+      <p class="tiny">Drag up to boost, down to mute, that hue's saturation.</p>
+    </section>
+
+    <section class="closed">
+      <h2>Luma vs saturation <button class="reset" id="lsReset">reset</button></h2>
+      <canvas id="lscv" class="strip" width="300" height="100"></canvas>
+      <p class="tiny">Saturation by brightness — left is shadows, right is highlights.</p>
+    </section>
+
+    <section class="closed">
+      <h2>Secondary colour <button class="reset" id="secReset">reset</button></h2>
+      <div class="row"><label style="flex:0 0 70px">Target hue</label><span id="secSwatch"></span><input type="range" id="secHueC" min="0" max="360" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Range</label><input type="range" id="secRange" min="5" max="120" value="40"><input type="number" class="num" value="40"></div>
+      <div class="row"><label>Softness</label><input type="range" id="secSoft" min="0" max="100" value="50"><input type="number" class="num" value="50"></div>
+      <div class="row"><label>Hue shift</label><input type="range" id="secHue" min="-60" max="60" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Saturation</label><input type="range" id="secSat" min="-100" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Luminance</label><input type="range" id="secLum" min="-50" max="50" value="0"><input type="number" class="num" value="0"></div>
+      <button class="btn pickbtn" id="secPick">⌖ Pick target colour from photo</button>
+      <p class="tiny">Grades only the chosen colour range — everything else is untouched.</p>
+    </section>
+
+    <section>
+      <h2>Color balance <button class="reset" id="cbReset">reset</button></h2>
+      <div class="cbwheels">
+        <div class="cbwheel-wrap"><canvas class="cbwheel" id="cbSh" width="96" height="96"></canvas><div class="cbwheel-label">Shadows</div></div>
+        <div class="cbwheel-wrap"><canvas class="cbwheel" id="cbMd" width="96" height="96"></canvas><div class="cbwheel-label">Midtones</div></div>
+        <div class="cbwheel-wrap"><canvas class="cbwheel" id="cbHi" width="96" height="96"></canvas><div class="cbwheel-label">Highlights</div></div>
+      </div>
+      <p class="tiny">Drag inside a wheel to tint that region. Center = no change. Double-click a wheel to reset just that wheel.</p>
+    </section>
+
+    <section>
+      <h2>Split toning <button class="reset" id="splitReset">reset</button></h2>
+      <div class="row"><label>Shadows</label><input type="color" id="shCol" value="#406080"><input type="range" id="shAmt" min="0" max="100" value="0"><input type="number" class="num" value="0"></div>
+      <div class="row"><label>Highlights</label><input type="color" id="hiCol" value="#e0a060"><input type="range" id="hiAmt" min="0" max="100" value="0"><input type="number" class="num" value="0"></div>
+    </section>
+
+    <section>
+      <h2>Transfer ramp</h2>
+      <canvas id="ramp" width="290" height="26"></canvas>
+    </section>
+
+    <footer>
+      <div class="strengthrow"><label>Look strength</label><input type="range" id="strength" min="0" max="100" value="100"><input type="number" class="num" value="100"></div>
+      <input id="lutname" value="my_grade" spellcheck="false">
+      <div class="exprow">
+        <select id="lutsize">
+          <option value="17">17-point</option>
+          <option value="33" selected>33-point</option>
+          <option value="65">65-point</option>
+        </select>
+        <button id="export" disabled>Export LUT (.cube)</button>
+      </div>
+      <button id="exportPack">Export look pack — every saved look as .cube</button>
+      <p class="hint">Standard .cube format · loads as an in-camera real-time LUT and in Resolve, Premiere, FCP, Photoshop</p>
+    </footer>
+  </aside>
+</main>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const clamp=v=>v<0?0:v>1?1:v;
+const hex2rgb=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16)/255);
+
+/* ================= state ================= */
+const sliders=["exposure","contrast","gamma","fade","highlights","shadows","blacks",
+  "temp","tint","sat","vib","skin","shAmt","hiAmt",
+  "secHueC","secRange","secSoft","secHue","secSat","secLum","strength"];
+const DEF={secRange:40,secSoft:50,strength:100};
+const state={};
+sliders.forEach(s=>state[s]=DEF[s]||0);
+state.shCol=hex2rgb("#406080");
+state.hiCol=hex2rgb("#e0a060");
+state.logMode=false;
+
+const defCurve=()=>[{x:0,y:0},{x:1,y:1}];
+const curves={m:defCurve(),r:defCurve(),g:defCurve(),b:defCurve()};
+let curveCh="m";
+
+const HUEN=8;
+const hueShift=new Array(HUEN).fill(0);
+const hueSat=new Array(HUEN).fill(0);
+const LUMN=8;
+const lumaSat=new Array(LUMN).fill(0);
+
+const cbState={
+  shadows:{x:0,y:0},
+  midtones:{x:0,y:0},
+  highlights:{x:0,y:0}
+};
+
+let baseLUT=null;
+let baseOn=true;
+
+/* ================= curve maths ================= */
+function buildCurveLUT(pts){
+  const p=[...pts].sort((a,b)=>a.x-b.x),n=p.length,lut=new Float32Array(256);
+  if(n===1){lut.fill(clamp(p[0].y));return lut;}
+  const dx=[],dy=[],m=[];
+  for(let i=0;i<n-1;i++){dx[i]=Math.max(p[i+1].x-p[i].x,1e-6);dy[i]=p[i+1].y-p[i].y;m[i]=dy[i]/dx[i];}
+  const t=[m[0]];
+  for(let i=1;i<n-1;i++)t[i]=(m[i-1]*m[i]<=0)?0:2*m[i-1]*m[i]/(m[i-1]+m[i]);
+  t[n-1]=m[n-2];
+  for(let k=0;k<256;k++){
+    const x=k/255;
+    if(x<=p[0].x){lut[k]=clamp(p[0].y);continue;}
+    if(x>=p[n-1].x){lut[k]=clamp(p[n-1].y);continue;}
+    let i=0;while(i<n-2&&x>p[i+1].x)i++;
+    const h=dx[i],s=(x-p[i].x)/h,s2=s*s,s3=s2*s;
+    lut[k]=clamp(p[i].y*(2*s3-3*s2+1)+h*t[i]*(s3-2*s2+s)+p[i+1].y*(-2*s3+3*s2)+h*t[i+1]*(s3-s2));
+  }
+  return lut;
+}
+let lutM,lutR,lutG,lutB;
+function rebuildCurves(){lutM=buildCurveLUT(curves.m);lutR=buildCurveLUT(curves.r);lutG=buildCurveLUT(curves.g);lutB=buildCurveLUT(curves.b);}
+rebuildCurves();
+const cAt=(lut,v)=>lut[Math.round(clamp(v)*255)];
+
+/* ================= colour helpers ================= */
+function rgb2hsl(r,g,b){
+  const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;let h=0;
+  const l=(mx+mn)/2,s=d===0?0:d/(1-Math.abs(2*l-1));
+  if(d){if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;if(h<0)h+=360;}
+  return[h,s,l];
+}
+function hsl2rgb(h,s,l){
+  const c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2;
+  let r=0,g=0,b=0;
+  if(h<60){r=c;g=x}else if(h<120){r=x;g=c}else if(h<180){g=c;b=x}
+  else if(h<240){g=x;b=c}else if(h<300){r=x;b=c}else{r=c;b=x}
+  return[r+m,g+m,b+m];
+}
+const sm=t=>t*t*(3-2*t);
+function periodic8(arr,h){
+  const f=h/360*HUEN,i0=Math.floor(f)%HUEN,i1=(i0+1)%HUEN,t=sm(f-Math.floor(f));
+  return arr[i0]*(1-t)+arr[i1]*t;
+}
+function linear8(arr,v){
+  const f=clamp(v)*(LUMN-1),i0=Math.floor(f),i1=Math.min(i0+1,LUMN-1),t=sm(f-i0);
+  return arr[i0]*(1-t)+arr[i1]*t;
+}
+
+function peakMask(l,center,halfWidth){
+  const t=Math.max(0,1-Math.abs(l-center)/halfWidth);
+  return t*t*(3-2*t);
+}
+function sstep(a,b,t){
+  if(b===a)return t<a?0:1;
+  t=Math.max(0,Math.min(1,(t-a)/(b-a)));
+  return t*t*(3-2*t);
+}
+
+function vlog2rec709(v){
+  const b=0.00873,c=0.241514,d=0.598206;
+  let lin = v>=0.181 ? Math.pow(10,(v-d)/c)-b : (v-0.125)/5.6;
+  if(lin<0)lin=0;
+  lin*=4.0;
+  const tm=lin/(1+lin*0.85);
+  return clamp(Math.pow(tm,1/2.2));
+}
+
+function sampleBase(r,g,b){
+  const N=baseLUT.size,d=baseLUT.data,m=N-1;
+  const rf=clamp(r)*m,gf=clamp(g)*m,bf=clamp(b)*m;
+  const r0=rf|0,g0=gf|0,b0=bf|0;
+  const r1=Math.min(r0+1,m),g1=Math.min(g0+1,m),b1=Math.min(b0+1,m);
+  const fr=rf-r0,fg=gf-g0,fb=bf-b0;
+  const idx=(R,G,B)=>((B*N+G)*N+R)*3;
+  const out=[0,0,0];
+  for(let ch=0;ch<3;ch++){
+    const c000=d[idx(r0,g0,b0)+ch],c100=d[idx(r1,g0,b0)+ch],
+          c010=d[idx(r0,g1,b0)+ch],c110=d[idx(r1,g1,b0)+ch],
+          c001=d[idx(r0,g0,b1)+ch],c101=d[idx(r1,g0,b1)+ch],
+          c011=d[idx(r0,g1,b1)+ch],c111=d[idx(r1,g1,b1)+ch];
+    const c00=c000+(c100-c000)*fr,c10=c010+(c110-c010)*fr,
+          c01=c001+(c101-c001)*fr,c11=c011+(c111-c011)*fr;
+    const c0=c00+(c10-c00)*fg,c1=c01+(c11-c01)*fg;
+    out[ch]=clamp(c0+(c1-c0)*fb);
+  }
+  return out;
+}
+
+/* ================= the transfer function ================= */
+function grade(r,g,b){
+  if(state.logMode){r=vlog2rec709(r);g=vlog2rec709(g);b=vlog2rec709(b);}
+  if(baseLUT&&baseOn)[r,g,b]=sampleBase(r,g,b);
+  const inR=r,inG=g,inB=b;
+  const t=state.temp/300,ti=state.tint/300;
+  r+=t;b-=t;g+=ti;r-=ti*0.5;b-=ti*0.5;
+  const ex=Math.pow(2,state.exposure/100);r*=ex;g*=ex;b*=ex;
+  r=clamp(r);g=clamp(g);b=clamp(b);
+  const gm=Math.pow(2,-state.gamma/120);
+  r=Math.pow(r,gm);g=Math.pow(g,gm);b=Math.pow(b,gm);
+  const c=state.contrast/100;
+  const con=v=>clamp(v+c*(v-0.5)*(1-Math.abs(2*v-1))*1.2+c*(v-0.5)*0.4);
+  r=con(r);g=con(g);b=con(b);
+  const f=state.fade/100*0.18;
+  r=r*(1-f)+f;g=g*(1-f)+f;b=b*(1-f)+f;
+
+  if(state.highlights||state.shadows||state.blacks){
+    const lt=0.2126*r+0.7152*g+0.0722*b;
+    const bkT=Math.max(0,1-lt/0.15);
+    const bkMask=bkT*bkT*(3-2*bkT);
+    const shMask=peakMask(lt,0.3,0.4);
+    const hiMask=peakMask(lt,0.7,0.4);
+    const adj=state.blacks/100*0.5*bkMask
+            +state.shadows/100*0.5*shMask
+            +state.highlights/100*0.5*hiMask;
+    if(adj!==0){
+      const ef=Math.pow(2,adj);
+      r*=ef;g*=ef;b*=ef;
+    }
+  }
+
+  r=cAt(lutR,cAt(lutM,r));g=cAt(lutG,cAt(lutM,g));b=cAt(lutB,cAt(lutM,b));
+  let needHsl=false;
+  for(let i=0;i<HUEN;i++)if(hueShift[i]||hueSat[i]){needHsl=true;break;}
+  if(needHsl){
+    const[h,s,l]=rgb2hsl(r,g,b);
+    if(s>0.02){
+      let nh=(h+periodic8(hueShift,h)*60*Math.min(1,s*4))%360;if(nh<0)nh+=360;
+      let ns=clamp(s*(1+periodic8(hueSat,h)*Math.min(1,s*4)));
+      [r,g,b]=hsl2rgb(nh,ns,l);
+    }
+  }
+  if(state.secHue||state.secSat||state.secLum){
+    const[h,sx,lx]=rgb2hsl(r,g,b);
+    if(sx>0.02){
+      let d=Math.abs(h-state.secHueC)%360;if(d>180)d=360-d;
+      const range=Math.max(state.secRange,1e-3);
+      let w=0;
+      if(d<=range){
+        const core=range*(1-state.secSoft/100);
+        w=d<=core?1:1-sm((d-core)/Math.max(range-core,1e-3));
+      }
+      w*=Math.min(1,sx*4);
+      if(w>0){
+        let nh=(h+state.secHue*w)%360;if(nh<0)nh+=360;
+        const ns=clamp(sx*(1+state.secSat/100*w));
+        [r,g,b]=hsl2rgb(nh,ns,lx);
+        const lf=1+state.secLum/100*0.6*w;
+        r=clamp(r*lf);g=clamp(g*lf);b=clamp(b*lf);
+      }
+    }
+  }
+
+  const cbAny=cbState.shadows.x||cbState.shadows.y
+            ||cbState.midtones.x||cbState.midtones.y
+            ||cbState.highlights.x||cbState.highlights.y;
+  if(cbAny){
+    const lcb=0.2126*r+0.7152*g+0.0722*b;
+    const shCbMask=1-sstep(0.15,0.5,lcb);
+    const mdCbMask=Math.max(0,1-Math.abs(lcb-0.5)*2);
+    const hiCbMask=sstep(0.5,0.85,lcb);
+    const regions=[
+      {mask:shCbMask,st:cbState.shadows},
+      {mask:mdCbMask,st:cbState.midtones},
+      {mask:hiCbMask,st:cbState.highlights}
+    ];
+    let dR=0,dG=0,dB=0;
+    for(const reg of regions){
+      const dx=reg.st.x,dy=reg.st.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<0.001)continue;
+      const hue=((Math.atan2(dy,dx)*180/Math.PI)+360)%360;
+      const sat=Math.min(1,dist);
+      const[tr,tg,tb]=hsl2rgb(hue,sat,0.5);
+      const intensity=0.4*reg.mask;
+      dR+=(tr-0.5)*intensity;
+      dG+=(tg-0.5)*intensity;
+      dB+=(tb-0.5)*intensity;
+    }
+    r+=dR;g+=dG;b+=dB;
+  }
+
+  let l2=0.2126*r+0.7152*g+0.0722*b;
+  let anyLs=false;for(let i=0;i<LUMN;i++)if(lumaSat[i]){anyLs=true;break;}
+  let satEff=1+state.sat/100;
+  if(anyLs)satEff*=1+linear8(lumaSat,l2);
+  if(state.vib){const cs=Math.max(r,g,b)-Math.min(r,g,b);satEff*=1+(state.vib/100)*(1-cs);}
+  if(satEff<0)satEff=0;
+  r=clamp(l2+(r-l2)*satEff);g=clamp(l2+(g-l2)*satEff);b=clamp(l2+(b-l2)*satEff);
+  l2=0.2126*r+0.7152*g+0.0722*b;
+  const sw=(1-l2)*(1-l2)*(state.shAmt/100)*0.5,hw=l2*l2*(state.hiAmt/100)*0.5;
+  r=clamp(r+(state.shCol[0]-0.5)*sw+(state.hiCol[0]-0.5)*hw);
+  g=clamp(g+(state.shCol[1]-0.5)*sw+(state.hiCol[1]-0.5)*hw);
+  b=clamp(b+(state.shCol[2]-0.5)*sw+(state.hiCol[2]-0.5)*hw);
+  if(state.skin>0){
+    const[hI,sI]=rgb2hsl(inR,inG,inB);
+    let w=0;
+    if(sI>0.05&&sI<0.75){
+      const d=Math.min(Math.abs(hI-25),360-Math.abs(hI-25));
+      if(d<28)w=1-sm(d/28);
+    }
+    if(w>0){
+      const k=w*state.skin/100;
+      const lOut=0.2126*r+0.7152*g+0.0722*b,lIn=0.2126*inR+0.7152*inG+0.0722*inB;
+      const sc=lIn>0.004?lOut/lIn:1;
+      const pr=clamp(inR*sc),pg=clamp(inG*sc),pb=clamp(inB*sc);
+      r=r+(pr-r)*k;g=g+(pg-g)*k;b=b+(pb-b)*k;
+    }
+  }
+  if(state.strength<100){
+    const ks=state.strength/100;
+    r=inR+(r-inR)*ks;g=inG+(g-inG)*ks;b=inB+(b-inB)*ks;
+  }
+  return[r,g,b];
+}
+
+/* ================= images & preview ================= */
+const view=$("view"),ctx=view.getContext("2d");
+const images=[];
+let cur=-1,showOriginal=false,wipeX=0.5,wipeDragging=false;
+let lastOut=null;
+
+function fail(msg){
+  const e=$("droperr");e.textContent=msg;e.style.display="block";
+  let t=document.getElementById("toast");
+  if(!t){
+    t=document.createElement("div");t.id="toast";
+    t.style.cssText="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99;background:#2a1714;border:1px solid var(--red);color:var(--text);font:12px var(--mono);padding:10px 16px;border-radius:3px;max-width:80vw;box-shadow:0 8px 24px rgba(0,0,0,.5)";
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;t.style.display="block";
+  clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",6000);
+}
+
+function addImageData(idata,name,srcURL){
+  const th=document.createElement("canvas");
+  const tw=Math.round(idata.width*54/idata.height);
+  th.width=tw;th.height=54;th.title=name;
+  const wrap=document.createElement("div");wrap.className="thumb";
+  const del=document.createElement("button");del.className="tdel";del.textContent="\u00D7";del.title="Remove "+name;
+  wrap.append(th,del);
+  const rec={data:idata,thumb:th,wrap,name,srcURL:srcURL||null};
+  images.push(rec);
+  th.addEventListener("click",()=>{selectImage(images.indexOf(rec));});
+  del.addEventListener("click",e=>{e.stopPropagation();removeImage(images.indexOf(rec));});
+  $("thumbs").appendChild(wrap);
+  selectImage(images.length-1);
+  refreshUIAfterLoad();
+}
+function refreshUIAfterLoad(){
+  $("drop").style.display="none";
+  $("filmframe").style.display="block";
+  $("stagebar").style.display="flex";
+  $("thumbs").style.display=images.length>1?"flex":"none";
+  $("scopes").style.display=$("scopeOn").checked?"flex":"none";
+  $("export").disabled=false;
+}
+function selectImage(i){
+  cur=i;
+  images.forEach((im,k)=>im.wrap.classList.toggle("on",k===i));
+  view.width=images[i].data.width;view.height=images[i].data.height;
+  render();
+}
+function loadFiles(list){
+  [...list].forEach(file=>{
+    if(!/^image\//.test(file.type||""))return fail("Skipped a non-image file.");
+    const reader=new FileReader();
+    reader.onerror=()=>fail("Couldn't read "+file.name);
+    reader.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>fail("Couldn't decode "+file.name+". Try a JPG or PNG.");
+      img.onload=()=>{
+        try{
+          const maxW=1100,sc=Math.min(1,maxW/img.width);
+          const w=Math.max(1,Math.round(img.width*sc)),h=Math.max(1,Math.round(img.height*sc));
+          const sc2=document.createElement("canvas");sc2.width=w;sc2.height=h;
+          sc2.getContext("2d").drawImage(img,0,0,w,h);
+          addImageData(sc2.getContext("2d").getImageData(0,0,w,h),file.name,reader.result);
+        }catch(err){fail("Browser blocked image pixels: "+err.message);}
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function makeTestChart(){
+  const w=960,h=640,cv=document.createElement("canvas");cv.width=w;cv.height=h;
+  const c=cv.getContext("2d");
+  c.fillStyle="#777";c.fillRect(0,0,w,h);
+  const checker=["#735244","#c29682","#627a9d","#576c43","#8580b1","#67bdaa",
+                 "#d67e2c","#505ba6","#c15a63","#5e3c6c","#9dbc40","#e0a32e",
+                 "#383d96","#469449","#af363c","#e7c71f","#bb5695","#0885a1",
+                 "#f3f3f2","#c8c8c8","#a0a0a0","#7a7a7a","#555555","#343434"];
+  const pw=w/6,ph=(h*0.5)/4;
+  checker.forEach((col,i)=>{
+    const x=(i%6)*pw,y=Math.floor(i/6)*ph;
+    c.fillStyle=col;c.fillRect(x+4,y+4,pw-8,ph-8);
+  });
+  const gy=h*0.5+8;
+  for(let x=0;x<w;x++){const v=Math.round(x/(w-1)*255);c.fillStyle=`rgb(${v},${v},${v})`;c.fillRect(x,gy,1,60);}
+  for(let x=0;x<w;x++){c.fillStyle=`hsl(${x/(w-1)*360} 80% 50%)`;c.fillRect(x,gy+68,1,60);}
+  const skins=["#ffe0cd","#f5cba7","#e0ac69","#c68642","#8d5524","#5a3a22"];
+  const sw2=w/skins.length;
+  skins.forEach((col,i)=>{c.fillStyle=col;c.fillRect(i*sw2+4,gy+136,sw2-8,h-gy-144);});
+  addImageData(c.getImageData(0,0,w,h),"test-chart");
+}
+
+let raf=null;
+function render(){
+  if(raf)return;
+  raf=requestAnimationFrame(()=>{
+    raf=null;
+    drawRamp();drawCurves();drawStrips();
+    scheduleCubeAnalysis();
+    if(cur<0)return;
+    const src=images[cur].data;
+    const N=25,plut=new Float32Array(N*N*N*3);
+    let i=0;
+    for(let b=0;b<N;b++)for(let g=0;g<N;g++)for(let r=0;r<N;r++){
+      const o=grade(r/(N-1),g/(N-1),b/(N-1));
+      plut[i++]=o[0];plut[i++]=o[1];plut[i++]=o[2];
+    }
+    const out=applyLut(src,plut,N);
+    lastOut=out;
+    if(showOriginal&&!$("wipeOn").checked){ctx.putImageData(src,0,0);}
+    else{
+      ctx.putImageData(out,0,0);
+      if($("wipeOn").checked){
+        const px=Math.round(wipeX*src.width);
+        if(px>0)ctx.putImageData(src,0,0,0,0,px,src.height);
+        positionWipe();
+      }
+    }
+    // Clipping overlay always runs LAST so it sits on top of everything
+    if($("clipOn").checked){
+      drawClipping(out,wipeX,$("wipeOn").checked);
+    }
+    if($("scopeOn").checked)drawHisto(out);
+    scheduleThumbs(plut,N);
+  });
+}
+function applyLut(src,plut,N){
+  const out=new ImageData(src.width,src.height);
+  const sd=src.data,od=out.data,m=(N-1)/255,NN=N*N;
+  for(let p=0;p<sd.length;p+=4){
+    const rf=sd[p]*m,gf=sd[p+1]*m,bf=sd[p+2]*m;
+    const r0=rf|0,g0=gf|0,b0=bf|0;
+    const r1=r0<N-1?r0+1:r0,g1=g0<N-1?g0+1:g0,b1=b0<N-1?b0+1:b0;
+    const fr=rf-r0,fg=gf-g0,fb=bf-b0;
+    const i000=((b0*N+g0)*N+r0)*3,i100=((b0*N+g0)*N+r1)*3,
+          i010=((b0*N+g1)*N+r0)*3,i110=((b0*N+g1)*N+r1)*3,
+          i001=((b1*N+g0)*N+r0)*3,i101=((b1*N+g0)*N+r1)*3,
+          i011=((b1*N+g1)*N+r0)*3,i111=((b1*N+g1)*N+r1)*3;
+    for(let ch=0;ch<3;ch++){
+      const c00=plut[i000+ch]+(plut[i100+ch]-plut[i000+ch])*fr,
+            c10=plut[i010+ch]+(plut[i110+ch]-plut[i010+ch])*fr,
+            c01=plut[i001+ch]+(plut[i101+ch]-plut[i001+ch])*fr,
+            c11=plut[i011+ch]+(plut[i111+ch]-plut[i011+ch])*fr;
+      const c0=c00+(c10-c00)*fg,c1=c01+(c11-c01)*fg;
+      od[p+ch]=255*(c0+(c1-c0)*fb);
+    }
+    od[p+3]=255;
+  }
+  return out;
+}
+
+/* === REPAIRED clipping overlay ===
+   Works on the graded `out` ImageData (the source of truth) instead of
+   canvas pixels, so wipe mode does not interfere. The wipe split is
+   respected: original side of the split stays clean. A halo+core pattern
+   makes the warning more visible than a flat tint. */
+function drawClipping(out,wipeXc,wipeOn){
+  const d=out.data;
+  const W=out.width,H=out.height;
+  const wipePx=wipeOn?Math.round(wipeXc*W):0;
+  const overlay=new Uint8ClampedArray(d.length);
+  // Pack core/halo ARGB tuples once
+  const HI_CORE_R=232,HI_CORE_G=60,HI_CORE_B=76;       // warm red
+  const HI_HALO_R=232,HI_HALO_G=120,HI_HALO_B=120;
+  const LO_CORE_R=60,LO_CORE_G=140,LO_CORE_B=232;       // cool blue
+  const LO_HALO_R=120,LO_HALO_G=170,LO_HALO_B=232;
+  for(let p=0;p<d.length;p+=4){
+    const r=d[p],g=d[p+1],b=d[p+2];
+    const hi=r>=254||g>=254||b>=254;
+    const lo=r<=1&&g<=1&&b<=1;
+    if(!hi&&!lo)continue;
+    // respect the wipe: only overlay on the graded side
+    if(wipeOn){
+      const x=(p/4)%W;
+      if(x<wipePx)continue;
+    }
+    const cR=hi?HI_CORE_R:LO_CORE_R,cG=hi?HI_CORE_G:LO_CORE_G,cB=hi?HI_CORE_B:LO_CORE_B;
+    const hR=hi?HI_HALO_R:LO_HALO_R,hG=hi?HI_HALO_G:LO_HALO_G,hB=hi?HI_HALO_B:LO_HALO_B;
+    // 1-pixel solid core
+    overlay[p]=cR;overlay[p+1]=cG;overlay[p+2]=cB;overlay[p+3]=255;
+    // 4-neighbour soft halo
+    const y=((p/4)/W)|0;
+    if(x>0)   {const q=p-4;overlay[q]=hR;overlay[q+1]=hG;overlay[q+2]=hB;overlay[q+3]=180;}
+    if(x<W-1) {const q=p+4;overlay[q]=hR;overlay[q+1]=hG;overlay[q+2]=hB;overlay[q+3]=180;}
+    if(y>0)   {const q=p-W*4;overlay[q]=hR;overlay[q+1]=hG;overlay[q+2]=hB;overlay[q+3]=180;}
+    if(y<H-1) {const q=p+W*4;overlay[q]=hR;overlay[q+1]=hG;overlay[q+2]=hB;overlay[q+3]=180;}
+  }
+  // Composite the overlay onto the current canvas without touching the source buffer
+  const cv=ctx.getImageData(0,0,W,H);
+  const cd=cv.data;
+  for(let p=0;p<cd.length;p+=4){
+    const a=overlay[p+3];
+    if(a===0)continue;
+    const af=a/255;
+    cd[p]  =overlay[p]  *af + cd[p]  *(1-af);
+    cd[p+1]=overlay[p+1]*af + cd[p+1]*(1-af);
+    cd[p+2]=overlay[p+2]*af + cd[p+2]*(1-af);
+  }
+  ctx.putImageData(cv,0,0);
+}
+function drawHisto(out){
+  const hcv=$("histo"),hc=hcv.getContext("2d");
+  const bins=[new Float64Array(64),new Float64Array(64),new Float64Array(64)];
+  const d=out.data;
+  for(let p=0;p<d.length;p+=16){
+    bins[0][d[p]>>2]++;bins[1][d[p+1]>>2]++;bins[2][d[p+2]>>2]++;
+  }
+  let mx=1;bins.forEach(b=>{for(const v of b)if(v>mx)mx=v;});
+  hc.fillStyle="#0d0c09";hc.fillRect(0,0,hcv.width,hcv.height);
+  const cols=["rgba(230,80,70,.8)","rgba(110,210,110,.8)","rgba(100,140,240,.8)"];
+  hc.globalCompositeOperation="screen";
+  bins.forEach((b,ci)=>{
+    hc.fillStyle=cols[ci];
+    for(let k=0;k<64;k++){
+      const hgt=Math.pow(b[k]/mx,0.5)*(hcv.height-4);
+      hc.fillRect(k*hcv.width/64,hcv.height-hgt,hcv.width/64-0.5,hgt);
+    }
+  });
+  hc.globalCompositeOperation="source-over";
+}
+let thumbTimer=null;
+function scheduleThumbs(plut,N){
+  if(images.length<2)return;
+  clearTimeout(thumbTimer);
+  thumbTimer=setTimeout(()=>{
+    images.forEach(im=>{
+      const tc=im.thumb.getContext("2d");
+      const sc=document.createElement("canvas");sc.width=im.thumb.width;sc.height=54;
+      const scx=sc.getContext("2d");
+      const full=document.createElement("canvas");full.width=im.data.width;full.height=im.data.height;
+      full.getContext("2d").putImageData(im.data,0,0);
+      scx.drawImage(full,0,0,sc.width,sc.height);
+      const small=scx.getImageData(0,0,sc.width,sc.height);
+      tc.putImageData(applyLut(small,plut,N),0,0);
+    });
+  },250);
+}
+function drawRamp(){
+  const rc=$("ramp"),c=rc.getContext("2d"),w=rc.width;
+  for(let x=0;x<w;x++){
+    const v=x/(w-1),[r,g,b]=grade(v,v,v);
+    c.fillStyle=`rgb(${r*255|0},${g*255|0},${b*255|0})`;
+    c.fillRect(x,0,1,rc.height);
+  }
+}
+function positionWipe(){
+  const wl=$("wipeline"),r=view.getBoundingClientRect(),wr=$("viewwrap").getBoundingClientRect();
+  wl.style.display=$("wipeOn").checked?"block":"none";
+  wl.style.left=(r.left-wr.left+wipeX*r.width)+"px";
+}
+
+/* ================= curves UI ================= */
+const ccv=$("curves"),cc=ccv.getContext("2d");
+const PAD=10;
+const cx2px=x=>PAD+x*(ccv.width-2*PAD);
+const cy2px=y=>ccv.height-PAD-y*(ccv.height-2*PAD);
+const px2cx=px=>clamp((px-PAD)/(ccv.width-2*PAD));
+const px2cy=py=>clamp((ccv.height-PAD-py)/(ccv.height-2*PAD));
+const chColour={m:"#e8e2d4",r:"#e06a5a",g:"#7ec07a",b:"#6a90e0"};
+function drawCurves(){
+  cc.clearRect(0,0,ccv.width,ccv.height);
+  cc.strokeStyle="#332e25";cc.lineWidth=1;
+  for(let i=1;i<4;i++){
+    cc.beginPath();cc.moveTo(cx2px(i/4),cy2px(0));cc.lineTo(cx2px(i/4),cy2px(1));cc.stroke();
+    cc.beginPath();cc.moveTo(cx2px(0),cy2px(i/4));cc.lineTo(cx2px(1),cy2px(i/4));cc.stroke();
+  }
+  cc.strokeStyle="#4a4336";
+  cc.beginPath();cc.moveTo(cx2px(0),cy2px(0));cc.lineTo(cx2px(1),cy2px(1));cc.stroke();
+  for(const ch of["m","r","g","b"]){
+    if(ch===curveCh)continue;
+    const lut=buildCurveLUT(curves[ch]);
+    cc.globalAlpha=.22;cc.strokeStyle=chColour[ch];cc.lineWidth=1;cc.beginPath();
+    for(let k=0;k<256;k++){const X=cx2px(k/255),Y=cy2px(lut[k]);k?cc.lineTo(X,Y):cc.moveTo(X,Y);}
+    cc.stroke();cc.globalAlpha=1;
+  }
+  const lut=buildCurveLUT(curves[curveCh]);
+  cc.strokeStyle=chColour[curveCh];cc.lineWidth=2;cc.beginPath();
+  for(let k=0;k<256;k++){const X=cx2px(k/255),Y=cy2px(lut[k]);k?cc.lineTo(X,Y):cc.moveTo(X,Y);}
+  cc.stroke();
+  for(const p of curves[curveCh]){
+    cc.fillStyle=chColour[curveCh];cc.beginPath();cc.arc(cx2px(p.x),cy2px(p.y),4.5,0,7);cc.fill();
+    cc.strokeStyle="#15130f";cc.lineWidth=1.5;cc.stroke();
+  }
+}
+let dragPt=null;
+const curvePos=e=>{const r=ccv.getBoundingClientRect();return[(e.clientX-r.left)*ccv.width/r.width,(e.clientY-r.top)*ccv.height/r.height];};
+function nearestPoint(px,py){
+  let best=null,bd=144;
+  for(const p of curves[curveCh]){const d=(cx2px(p.x)-px)**2+(cy2px(p.y)-py)**2;if(d<bd){bd=d;best=p;}}
+  return best;
+}
+ccv.addEventListener("pointerdown",e=>{
+  const[px,py]=curvePos(e);
+  let p=nearestPoint(px,py);
+  if(!p){p={x:px2cx(px),y:px2cy(py)};curves[curveCh].push(p);}
+  dragPt=p;ccv.setPointerCapture(e.pointerId);rebuildCurves();render();
+});
+ccv.addEventListener("pointermove",e=>{
+  if(!dragPt)return;
+  const[px,py]=curvePos(e);
+  const pts=curves[curveCh],isEnd=dragPt===pts.reduce((a,b)=>a.x<b.x?a:b)||dragPt===pts.reduce((a,b)=>a.x>b.x?a:b);
+  if(!isEnd)dragPt.x=px2cx(px);
+  dragPt.y=px2cy(py);
+  rebuildCurves();render();
+});
+window.addEventListener("pointerup",()=>{if(dragPt){dragPt=null;pushHistory();}else dragPt=null;});
+ccv.addEventListener("dblclick",e=>{
+  const[px,py]=curvePos(e),p=nearestPoint(px,py),pts=curves[curveCh];
+  if(p&&pts.length>2){curves[curveCh]=pts.filter(q=>q!==p);rebuildCurves();render();pushHistory();}
+});
+document.querySelectorAll(".chtabs button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".chtabs button").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on");curveCh=b.dataset.ch;drawCurves();
+}));
+$("curveReset").addEventListener("click",()=>{curves[curveCh]=defCurve();rebuildCurves();render();pushHistory();});
+
+/* ================= generic handle strips ================= */
+function makeStrip(cvId,arr,n,periodic,bgFn){
+  const cv=$(cvId),c=cv.getContext("2d"),HP=8;
+  const hx=i=>HP+(i+0.5)/n*(cv.width-2*HP);
+  const hy=v=>cv.height/2-v*(cv.height/2-HP);
+  function draw(){
+    c.clearRect(0,0,cv.width,cv.height);
+    for(let x=HP;x<cv.width-HP;x++){
+      c.fillStyle=bgFn((x-HP)/(cv.width-2*HP));
+      c.globalAlpha=.35;c.fillRect(x,HP,1,cv.height-2*HP);c.globalAlpha=1;
+    }
+    c.strokeStyle="#4a4336";c.beginPath();c.moveTo(HP,cv.height/2);c.lineTo(cv.width-HP,cv.height/2);c.stroke();
+    c.strokeStyle="#e8e2d4";c.lineWidth=2;c.beginPath();
+    for(let x=0;x<=200;x++){
+      const u=x/200;
+      const v=periodic?periodic8(arr,u*360):linear8(arr,u);
+      const X=HP+u*(cv.width-2*HP),Y=hy(v);
+      x?c.lineTo(X,Y):c.moveTo(X,Y);
+    }
+    c.stroke();
+    for(let i=0;i<n;i++){
+      c.fillStyle=bgFn((i+0.5)/n);
+      c.beginPath();c.arc(hx(i),hy(arr[i]),6,0,7);c.fill();
+      c.strokeStyle="#15130f";c.lineWidth=1.5;c.stroke();
+    }
+  }
+  let di=-1;
+  const pos=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height];};
+  cv.addEventListener("pointerdown",e=>{
+    const[px,py]=pos(e);
+    let best=-1,bd=400;
+    for(let i=0;i<n;i++){const d=(hx(i)-px)**2+(hy(arr[i])-py)**2;if(d<bd){bd=d;best=i;}}
+    if(best<0){best=Math.max(0,Math.min(n-1,Math.round((px-HP)/(cv.width-2*HP)*n-0.5)));}
+    di=best;cv.setPointerCapture(e.pointerId);
+    arr[di]=Math.max(-1,Math.min(1,(cv.height/2-py)/(cv.height/2-HP)));render();
+  });
+  cv.addEventListener("pointermove",e=>{
+    if(di<0)return;
+    const[,py]=pos(e);
+    arr[di]=Math.max(-1,Math.min(1,(cv.height/2-py)/(cv.height/2-HP)));render();
+  });
+  window.addEventListener("pointerup",()=>{if(di>=0){di=-1;pushHistory();}else di=-1;});
+  return draw;
+}
+const drawHueHue=makeStrip("huecv",hueShift,HUEN,true,u=>`hsl(${u*360} 60% 38%)`);
+const drawHueSat=makeStrip("hscv",hueSat,HUEN,true,u=>`hsl(${u*360} 60% 38%)`);
+const drawLumaSat=makeStrip("lscv",lumaSat,LUMN,false,u=>{const v=Math.round(u*255);return`rgb(${v},${v},${v})`;});
+function drawStrips(){drawHueHue();drawHueSat();drawLumaSat();}
+$("hueReset").addEventListener("click",()=>{hueShift.fill(0);render();pushHistory();});
+$("hsReset").addEventListener("click",()=>{hueSat.fill(0);render();pushHistory();});
+$("lsReset").addEventListener("click",()=>{lumaSat.fill(0);render();pushHistory();});
+
+/* ================= colour balance wheels ================= */
+function drawColorWheel(canvas,sx,sy){
+  const c=canvas.getContext("2d");
+  const W=canvas.width,H=canvas.height;
+  const cx=W/2,cy=H/2;
+  const r=Math.min(W,H)/2-2;
+  const img=c.createImageData(W,H);
+  for(let py=0;py<H;py++){
+    for(let px=0;px<W;px++){
+      const dx=(px-cx)/r;
+      const dy=(py-cy)/r;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      const i=(py*W+px)*4;
+      if(dist<=1){
+        const angle=((Math.atan2(-dy,dx)*180/Math.PI)+360)%360;
+        const sat=dist;
+        const[rr,gg,bb]=hsl2rgb(angle,sat,0.5);
+        img.data[i]=rr*255;
+        img.data[i+1]=gg*255;
+        img.data[i+2]=bb*255;
+        img.data[i+3]=255;
+      }else{
+        img.data[i+3]=0;
+      }
+    }
+  }
+  c.putImageData(img,0,0);
+  c.strokeStyle="#454c43";
+  c.lineWidth=1;
+  c.beginPath();
+  c.arc(cx,cy,r,0,Math.PI*2);
+  c.stroke();
+  c.strokeStyle="rgba(255,255,255,0.22)";
+  c.lineWidth=1;
+  c.beginPath();
+  c.moveTo(cx-5,cy);c.lineTo(cx+5,cy);
+  c.moveTo(cx,cy-5);c.lineTo(cx,cy+5);
+  c.stroke();
+  if(Math.abs(sx)>0.001||Math.abs(sy)>0.001){
+    const ix=cx+sx*r;
+    const iy=cy-sy*r;
+    c.fillStyle="#fff";
+    c.strokeStyle="#000";
+    c.lineWidth=1.5;
+    c.beginPath();
+    c.arc(ix,iy,6,0,Math.PI*2);
+    c.fill();
+    c.stroke();
+  }
+}
+function setupColorWheel(canvasId,region){
+  const canvas=$(canvasId);
+  const radius=Math.min(canvas.width,canvas.height)/2-2;
+  let dragging=false;
+  const updateFromEvent=e=>{
+    const rect=canvas.getBoundingClientRect();
+    const px=(e.clientX-rect.left)/rect.width*canvas.width;
+    const py=(e.clientY-rect.top)/rect.height*canvas.height;
+    const cx=canvas.width/2,cy=canvas.height/2;
+    const dx=(px-cx)/radius;
+    const dy=-(py-cy)/radius;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>1){
+      cbState[region].x=dx/dist;
+      cbState[region].y=dy/dist;
+    }else{
+      cbState[region].x=dx;
+      cbState[region].y=dy;
+    }
+    drawColorWheel(canvas,cbState[region].x,cbState[region].y);
+    render();
+  };
+  canvas.addEventListener("pointerdown",e=>{
+    dragging=true;
+    canvas.setPointerCapture(e.pointerId);
+    updateFromEvent(e);
+  });
+  canvas.addEventListener("pointermove",e=>{
+    if(dragging)updateFromEvent(e);
+  });
+  const release=e=>{
+    if(dragging){
+      dragging=false;
+      try{canvas.releasePointerCapture(e.pointerId);}catch(_){}
+      pushHistory();
+    }
+  };
+  canvas.addEventListener("pointerup",release);
+  canvas.addEventListener("pointercancel",release);
+  canvas.addEventListener("dblclick",()=>{
+    cbState[region]={x:0,y:0};
+    drawColorWheel(canvas,0,0);
+    render();
+    pushHistory();
+  });
+  drawColorWheel(canvas,cbState[region].x,cbState[region].y);
+}
+setupColorWheel("cbSh","shadows");
+setupColorWheel("cbMd","midtones");
+setupColorWheel("cbHi","highlights");
+$("cbReset").addEventListener("click",e=>{
+  e.stopPropagation();
+  cbState.shadows={x:0,y:0};
+  cbState.midtones={x:0,y:0};
+  cbState.highlights={x:0,y:0};
+  drawColorWheel($("cbSh"),0,0);
+  drawColorWheel($("cbMd"),0,0);
+  drawColorWheel($("cbHi"),0,0);
+  render();
+  pushHistory();
+});
+
+/* ================= general UI ================= */
+sliders.forEach(id=>{
+  const el=$(id);
+  const num=el.parentElement.querySelector(".num");
+  if(num){num.min=el.min;num.max=el.max;num.step=1;}
+  el.addEventListener("input",()=>{
+    state[id]=+el.value;
+    if(num)num.value=el.value;
+    render();
+  });
+  el.addEventListener("change",pushHistory);
+  if(num){
+    const commit=()=>{
+      let v=parseFloat(num.value);
+      if(isNaN(v))v=state[id];
+      v=Math.max(+el.min,Math.min(+el.max,Math.round(v)));
+      num.value=v;el.value=v;state[id]=v;render();pushHistory();
+    };
+    num.addEventListener("change",commit);
+    num.addEventListener("keydown",e=>{if(e.key==="Enter"){commit();num.blur();}});
+  }
+});
+$("shCol").addEventListener("input",e=>{state.shCol=hex2rgb(e.target.value);render();});
+$("shCol").addEventListener("change",pushHistory);
+$("hiCol").addEventListener("input",e=>{state.hiCol=hex2rgb(e.target.value);render();});
+$("hiCol").addEventListener("change",pushHistory);
+$("logMode").addEventListener("change",e=>{state.logMode=e.target.checked;render();pushHistory();});
+
+const drop=$("drop"),fileInput=$("file");
+drop.addEventListener("click",e=>{if(e.target.tagName!=="BUTTON")fileInput.click();});
+fileInput.addEventListener("change",e=>{if(e.target.files)loadFiles(e.target.files);fileInput.value="";});
+
+["dragover","dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{
+  e.preventDefault();
+  if(ev==="drop")e.stopPropagation();
+  drop.classList.toggle("over",ev==="dragover");
+  if(ev==="drop"&&e.dataTransfer.files.length)loadFiles(e.dataTransfer.files);
+}));
+document.body.addEventListener("dragover",e=>e.preventDefault());
+document.body.addEventListener("drop",e=>{e.preventDefault();if(e.dataTransfer.files.length)loadFiles(e.dataTransfer.files);});
+$("newimg").addEventListener("click",()=>fileInput.click());
+$("chartbtn1").addEventListener("click",makeTestChart);
+$("chartbtn2").addEventListener("click",makeTestChart);
+
+/* ================= eyedroppers ================= */
+let pickMode=null;
+function setPick(mode){
+  pickMode=(pickMode===mode)?null:mode;
+  view.classList.toggle("picking",!!pickMode);
+  $("wbPick").classList.toggle("on",pickMode==="wb");
+  $("secPick").classList.toggle("on",pickMode==="sec");
+}
+$("wbPick").addEventListener("click",()=>setPick("wb"));
+$("secPick").addEventListener("click",()=>setPick("sec"));
+function samplePixel(e){
+  const rect=view.getBoundingClientRect(),src=images[cur].data;
+  const x=Math.max(0,Math.min(src.width-1,Math.round((e.clientX-rect.left)/rect.width*src.width)));
+  const y=Math.max(0,Math.min(src.height-1,Math.round((e.clientY-rect.top)/rect.height*src.height)));
+  const i=(y*src.width+x)*4;
+  let r=src.data[i]/255,g=src.data[i+1]/255,b=src.data[i+2]/255;
+  if(state.logMode){r=vlog2rec709(r);g=vlog2rec709(g);b=vlog2rec709(b);}
+  if(baseLUT&&baseOn)[r,g,b]=sampleBase(r,g,b);
+  return[r,g,b];
+}
+function setSliderUI(id,v){
+  v=Math.max(+$(id).min,Math.min(+$(id).max,Math.round(v)));
+  state[id]=v;$(id).value=v;
+  const out=$(id).parentElement.querySelector(".num");if(out)out.value=v;
+}
+function handlePick(e){
+  if(!pickMode||cur<0)return false;
+  const[r,g,b]=samplePixel(e);
+  if(pickMode==="wb"){
+    const t=(b-r)/2;
+    const r2=r+t,b2=b-t;
+    const ti=((r2+b2)/2-g)/1.5;
+    setSliderUI("temp",t*300);
+    setSliderUI("tint",ti*300);
+  }else{
+    const[h]=rgb2hsl(r,g,b);
+    setSliderUI("secHueC",h);
+    updateSecSwatch();
+    document.querySelectorAll("aside section").forEach(sec=>{
+      if(sec.querySelector("#secHueC"))sec.classList.remove("closed");
+    });
+  }
+  setPick(null);render();pushHistory();
+  return true;
+}
+view.addEventListener("pointerdown",e=>{
+  if(handlePick(e))return;
+  if($("wipeOn").checked){
+    wipeDragging=true;view.setPointerCapture(e.pointerId);
+    const r=view.getBoundingClientRect();wipeX=clamp((e.clientX-r.left)/r.width);render();
+  }else{showOriginal=true;render();}
+});
+view.addEventListener("pointermove",e=>{
+  if(!wipeDragging)return;
+  const r=view.getBoundingClientRect();wipeX=clamp((e.clientX-r.left)/r.width);render();
+});
+window.addEventListener("pointerup",()=>{
+  wipeDragging=false;
+  if(showOriginal){showOriginal=false;render();}
+});
+$("wipeOn").addEventListener("change",()=>{
+  $("comparehint").textContent=$("wipeOn").checked?"Drag on the image to move the split":"Hold on the image to compare";
+  if(!$("wipeOn").checked)$("wipeline").style.display="none";
+  render();
+});
+/* REPAIRED: cancel any pending RAF on toggle so the new checkbox state
+   is always read on the very next render() call. */
+$("clipOn").addEventListener("change",()=>{
+  if(raf){cancelAnimationFrame(raf);raf=null;}
+  render();
+});
+$("scopeOn").addEventListener("change",()=>{
+  $("scopes").style.display=$("scopeOn").checked&&cur>=0?"flex":"none";render();
+});
+window.addEventListener("resize",positionWipe);
+
+/* ================= base LUT import ================= */
+$("importLut").addEventListener("click",()=>$("lutfile").click());
+$("lutfile").addEventListener("change",e=>{
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const lines=reader.result.split(/\r?\n/);
+      let size=0;const vals=[];
+      for(const ln of lines){
+        const s=ln.trim();
+        if(!s||s[0]==="#")continue;
+        if(/^LUT_3D_SIZE/i.test(s)){size=parseInt(s.split(/\s+/)[1]);continue;}
+        if(/^(TITLE|DOMAIN_|LUT_1D)/i.test(s))continue;
+        const parts=s.split(/\s+/);
+        if(parts.length>=3&&!isNaN(+parts[0])){vals.push(+parts[0],+parts[1],+parts[2]);}
+      }
+      if(!size||vals.length<size*size*size*3)throw new Error("not a valid 3D cube file");
+      baseLUT={size,data:Float32Array.from(vals),name:file.name};
+      $("basename").textContent=file.name+" ("+size+"\u00B3)";
+      $("baseinfo").style.display="block";
+      render();pushHistory();
+    }catch(err){fail("Couldn't import LUT: "+err.message);}
+  };
+  reader.readAsText(file);
+  e.target.value="";
+});
+$("baseclear").addEventListener("click",()=>{baseLUT=null;$("baseinfo").style.display="none";render();pushHistory();});
+$("baseEnable").addEventListener("change",e=>{baseOn=e.target.checked;render();pushHistory();});
+
+/* ================= film presets ================= */
+const presets={
+  neutral:{},
+  portra400:{temp:10,tint:3,contrast:-6,sat:-10,vib:8,fade:8,shAmt:12,shCol:"#4a5468",hiAmt:18,hiCol:"#ecc89a",
+    curves:{m:[{x:0,y:0.03},{x:0.25,y:0.24},{x:0.8,y:0.84},{x:1,y:0.97}]},
+    hue:[0,0.06,0,-0.10,0,0,0,0.04]},
+  ektar100:{temp:6,contrast:18,sat:24,vib:10,
+    curves:{m:[{x:0,y:0},{x:0.2,y:0.16},{x:0.85,y:0.9},{x:1,y:1}],r:[{x:0,y:0},{x:0.5,y:0.53},{x:1,y:1}]},
+    hue:[0.04,0.05,0,0,0,-0.05,0,0]},
+  gold200:{temp:24,tint:4,contrast:8,sat:10,fade:5,shAmt:10,shCol:"#5c4e3a",hiAmt:26,hiCol:"#f0c478",
+    curves:{b:[{x:0,y:0.02},{x:0.5,y:0.46},{x:1,y:0.95}]},
+    hue:[0,0.05,-0.12,-0.16,0,0,0,0]},
+  kodachrome64:{temp:4,contrast:26,sat:-4,vib:14,gamma:-6,shAmt:16,shCol:"#2e4450",hiAmt:10,hiCol:"#e8c8a0",
+    curves:{m:[{x:0,y:0},{x:0.18,y:0.12},{x:0.5,y:0.5},{x:0.88,y:0.92},{x:1,y:1}],r:[{x:0,y:0},{x:0.45,y:0.5},{x:1,y:1}]},
+    hue:[0.05,0.04,0,-0.06,0,0,0,-0.06]},
+  velvia50:{temp:-4,contrast:30,sat:34,vib:8,gamma:-4,
+    curves:{m:[{x:0,y:0},{x:0.15,y:0.09},{x:0.85,y:0.93},{x:1,y:1}]},
+    hue:[0.03,0,0.06,0.08,0,-0.04,0,0.06]},
+  provia100f:{temp:-6,contrast:12,sat:6,vib:4,
+    curves:{m:[{x:0,y:0},{x:0.22,y:0.19},{x:0.82,y:0.86},{x:1,y:1}]},
+    hue:[0,0,0,0,0,-0.03,0,0]},
+  pro400h:{temp:-4,tint:-6,contrast:-12,sat:-12,vib:10,fade:14,shAmt:24,shCol:"#4e7268",hiAmt:12,hiCol:"#eadfd0",
+    curves:{m:[{x:0,y:0.05},{x:0.5,y:0.52},{x:1,y:0.96}]},
+    hue:[0,0.04,0,0.10,0.06,0,0,0]},
+  superia400:{temp:-3,tint:-10,contrast:14,sat:14,shAmt:18,shCol:"#2f5a58",hiAmt:8,hiCol:"#e6e0c8",
+    curves:{m:[{x:0,y:0},{x:0.2,y:0.15},{x:1,y:1}]},
+    hue:[0.03,0,0.08,0.06,0.05,0,0,0]},
+  cinestill800t:{temp:-22,tint:2,contrast:6,sat:4,fade:16,shAmt:28,shCol:"#2a4a60",hiAmt:30,hiCol:"#f0907a",
+    curves:{m:[{x:0,y:0.05},{x:0.5,y:0.5},{x:0.9,y:0.93},{x:1,y:0.98}]},
+    hue:[0.05,0,0,0,0.04,-0.05,0,0]},
+  trix400:{sat:-100,contrast:24,gamma:2,
+    curves:{m:[{x:0,y:0},{x:0.2,y:0.13},{x:0.78,y:0.86},{x:1,y:1}]}},
+  hp5:{sat:-100,contrast:8,fade:6,
+    curves:{m:[{x:0,y:0.02},{x:0.3,y:0.3},{x:0.85,y:0.88},{x:1,y:0.97}]}}
+};
+function applyPreset(p){
+  sliders.forEach(s=>{
+    state[s]=(p[s]!==undefined)?p[s]:(DEF[s]||0);$(s).value=state[s];
+    const out=$(s).parentElement.querySelector(".num");if(out)out.value=state[s];
+  });
+  state.shCol=hex2rgb(p.shCol||"#406080");$("shCol").value=p.shCol||"#406080";
+  state.hiCol=hex2rgb(p.hiCol||"#e0a060");$("hiCol").value=p.hiCol||"#e0a060";
+  ["m","r","g","b"].forEach(ch=>{
+    curves[ch]=(p.curves&&p.curves[ch])?p.curves[ch].map(q=>({x:q.x,y:q.y})):defCurve();
+  });
+  hueShift.fill(0);if(p.hue)p.hue.forEach((v,i)=>hueShift[i]=v);
+  hueSat.fill(0);if(p.hueSat)p.hueSat.forEach((v,i)=>hueSat[i]=v);
+  lumaSat.fill(0);if(p.lumaSat)p.lumaSat.forEach((v,i)=>lumaSat[i]=v);
+  cbState.shadows={x:0,y:0};
+  cbState.midtones={x:0,y:0};
+  cbState.highlights={x:0,y:0};
+  drawColorWheel($("cbSh"),0,0);
+  drawColorWheel($("cbMd"),0,0);
+  drawColorWheel($("cbHi"),0,0);
+  rebuildCurves();render();
+}
+document.querySelectorAll(".presets button").forEach(btn=>btn.addEventListener("click",()=>{applyPreset(presets[btn.dataset.p]);pushHistory();}));
+
+/* ================= extract look from photo ================= */
+function exDecode(file,cb){
+  if(!file||!/^image\//.test(file.type||""))return fail("That doesn't look like an image file.");
+  const rd=new FileReader();
+  rd.onerror=()=>fail("Couldn't read "+file.name);
+  rd.onload=()=>{
+    const im=new Image();
+    im.onerror=()=>fail("Couldn't decode "+file.name);
+    im.onload=()=>{
+      const sc=Math.min(1,320/Math.max(im.width,im.height));
+      const w=Math.max(1,Math.round(im.width*sc)),h=Math.max(1,Math.round(im.height*sc));
+      const cv=document.createElement("canvas");cv.width=w;cv.height=h;
+      cv.getContext("2d").drawImage(im,0,0,w,h);
+      try{cb(cv.getContext("2d").getImageData(0,0,w,h));}catch(e){fail("Browser blocked image pixels: "+e.message);}
+    };
+    im.src=rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+const exHex=(r,g,b)=>"#"+[r,g,b].map(v=>Math.round(clamp(v)*255).toString(16).padStart(2,"0")).join("");
+$("exSingle").addEventListener("click",()=>$("exSingleF").click());
+$("exSingleF").addEventListener("change",e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  exDecode(f,d=>{
+    const n=d.data.length/4;
+    // per-channel histograms + chroma, plus shadow/highlight means for tinting
+    const h=[new Float64Array(256),new Float64Array(256),new Float64Array(256)];
+    let sc=0,shR=0,shG=0,shB=0,shN=0,hiR=0,hiG=0,hiB=0,hiN=0;
+    for(let p=0;p<d.data.length;p+=4){
+      const r=d.data[p],g=d.data[p+1],b=d.data[p+2];
+      h[0][r]++;h[1][g]++;h[2][b]++;
+      sc+=Math.max(r,g,b)-Math.min(r,g,b);
+      const l=0.2126*r+0.7152*g+0.0722*b;
+      if(l<64){shR+=r;shG+=g;shB+=b;shN++;}else if(l>192){hiR+=r;hiG+=g;hiB+=b;hiN++;}
+    }
+    // cumulative distribution per channel
+    const cdf=h.map(ch=>{const c=new Float64Array(256);let a=0;for(let i=0;i<256;i++){a+=ch[i];c[i]=a/n;}return c;});
+    const level=(c,q)=>{for(let i=0;i<256;i++)if(c[i]>=q)return i/255;return 1;};
+    // HISTOGRAM MATCHING: map each channel's percentiles onto a neutral target
+    // ramp. This linearises every channel, removing colour casts and recovering
+    // contrast far more faithfully than matching channel means alone.
+    const qs=[0.02,0.25,0.5,0.75,0.98],tg=[0.04,0.27,0.5,0.73,0.96];
+    const mkCurve=c=>{
+      const pts=[{x:0,y:0}];
+      for(let i=0;i<qs.length;i++){
+        const x=level(c,qs[i]);
+        if(x>pts[pts.length-1].x+0.01)pts.push({x,y:tg[i]});
+      }
+      pts.push({x:1,y:1});
+      return pts;
+    };
+    applyGradeData({app:"LUTsmith",state:{},curves:{},name:$("lutname").value});
+    curves.r=mkCurve(cdf[0]);curves.g=mkCurve(cdf[1]);curves.b=mkCurve(cdf[2]);
+    setS("sat",((sc/n/255)/0.15-1)*50);
+    const tone=(R,G,B,Nn,colId,amtId)=>{
+      if(!Nn)return;
+      const mr=R/Nn/255,mg=G/Nn/255,mb=B/Nn/255,ml=0.2126*mr+0.7152*mg+0.0722*mb;
+      const dr=mr-ml,dg=mg-ml,db=mb-ml,mag=Math.sqrt(dr*dr+dg*dg+db*db);
+      if(mag>0.008){
+        $(colId).value=exHex(0.5+dr/mag*0.25,0.5+dg/mag*0.25,0.5+db/mag*0.25);
+        state[colId==="shCol"?"shCol":"hiCol"]=hex2rgb($(colId).value);
+        setS(amtId,Math.min(60,mag*500));
+      }
+    };
+    tone(shR,shG,shB,shN,"shCol","shAmt");
+    tone(hiR,hiG,hiB,hiN,"hiCol","hiAmt");
+    rebuildCurves();render();pushHistory();
+    fail("Look estimated \u2014 review Curves, Colour and Split toning, then refine. Estimation from one photo is approximate.");
+  });
+});
+
+/* ================= shared grade serialise / apply ================= */
+function buildGradeData(){
+  return {
+    app:"LUTsmith",version:2,name:$("lutname").value,
+    state:{...state,shCol:undefined,hiCol:undefined},
+    shCol:$("shCol").value,hiCol:$("hiCol").value,
+    logMode:state.logMode,curves:JSON.parse(JSON.stringify(curves)),
+    hueShift:[...hueShift],hueSat:[...hueSat],lumaSat:[...lumaSat],
+    cbState:{
+      shadows:{x:cbState.shadows.x,y:cbState.shadows.y},
+      midtones:{x:cbState.midtones.x,y:cbState.midtones.y},
+      highlights:{x:cbState.highlights.x,y:cbState.highlights.y}
+    },
+    baseOn:baseOn,
+    baseLUT:baseLUT?{size:baseLUT.size,data:Array.from(baseLUT.data),name:baseLUT.name}:null
+  };
+}
+function applyDataSilent(p){
+  sliders.forEach(s2=>{state[s2]=(p.state&&p.state[s2]!==undefined)?p.state[s2]:(DEF[s2]||0);});
+  state.shCol=hex2rgb(p.shCol||"#406080");
+  state.hiCol=hex2rgb(p.hiCol||"#e0a060");
+  state.logMode=!!p.logMode;
+  ["m","r","g","b"].forEach(ch=>curves[ch]=((p.curves&&p.curves[ch])||defCurve()).map(q=>({x:q.x,y:q.y})));
+  hueShift.fill(0);(p.hueShift||[]).forEach((v,i)=>hueShift[i]=v);
+  hueSat.fill(0);(p.hueSat||[]).forEach((v,i)=>hueSat[i]=v);
+  lumaSat.fill(0);(p.lumaSat||[]).forEach((v,i)=>lumaSat[i]=v);
+  if(p.cbState){
+    if(p.cbState.shadows)   cbState.shadows   ={x:p.cbState.shadows.x||0,   y:p.cbState.shadows.y||0};
+    if(p.cbState.midtones)  cbState.midtones  ={x:p.cbState.midtones.x||0,  y:p.cbState.midtones.y||0};
+    if(p.cbState.highlights)cbState.highlights={x:p.cbState.highlights.x||0,y:p.cbState.highlights.y||0};
+  }else{
+    cbState.shadows={x:0,y:0};cbState.midtones={x:0,y:0};cbState.highlights={x:0,y:0};
+  }
+  rebuildCurves();
+}
+function applyGradeData(p){
+  if(p.app!=="LUTsmith")throw new Error("not a LUTsmith grade");
+  sliders.forEach(s2=>{
+    state[s2]=(p.state&&p.state[s2]!==undefined)?p.state[s2]:(DEF[s2]||0);$(s2).value=state[s2];
+    const out=$(s2).parentElement.querySelector(".num");if(out)out.value=state[s2];
+  });
+  $("shCol").value=p.shCol||"#406080";state.shCol=hex2rgb($("shCol").value);
+  $("hiCol").value=p.hiCol||"#e0a060";state.hiCol=hex2rgb($("hiCol").value);
+  state.logMode=!!p.logMode;$("logMode").checked=state.logMode;
+  ["m","r","g","b"].forEach(ch=>curves[ch]=((p.curves&&p.curves[ch])||defCurve()).map(q=>({x:q.x,y:q.y})));
+  hueShift.fill(0);(p.hueShift||[]).forEach((v,i)=>hueShift[i]=v);
+  hueSat.fill(0);(p.hueSat||[]).forEach((v,i)=>hueSat[i]=v);
+  lumaSat.fill(0);(p.lumaSat||[]).forEach((v,i)=>lumaSat[i]=v);
+  if(p.cbState){
+    cbState.shadows   =p.cbState.shadows   ?{x:p.cbState.shadows.x   ||0,y:p.cbState.shadows.y   ||0}:{x:0,y:0};
+    cbState.midtones  =p.cbState.midtones  ?{x:p.cbState.midtones.x  ||0,y:p.cbState.midtones.y  ||0}:{x:0,y:0};
+    cbState.highlights=p.cbState.highlights?{x:p.cbState.highlights.x||0,y:p.cbState.highlights.y||0}:{x:0,y:0};
+  }else{
+    cbState.shadows={x:0,y:0};cbState.midtones={x:0,y:0};cbState.highlights={x:0,y:0};
+  }
+  drawColorWheel($("cbSh"),cbState.shadows.x,cbState.shadows.y);
+  drawColorWheel($("cbMd"),cbState.midtones.x,cbState.midtones.y);
+  drawColorWheel($("cbHi"),cbState.highlights.x,cbState.highlights.y);
+  if(p.baseLUT){
+    baseLUT={size:p.baseLUT.size,data:Float32Array.from(p.baseLUT.data),name:p.baseLUT.name};
+    baseOn=(p.baseOn!==false);
+    $("baseEnable").checked=baseOn;
+    $("basename").textContent=p.baseLUT.name+" ("+p.baseLUT.size+"\u00B3)";
+    $("baseinfo").style.display="block";
+  }else if(p.baseLUT===null&&Object.prototype.hasOwnProperty.call(p,"baseLUT")){
+    baseLUT=null;$("baseinfo").style.display="none";
+  }
+  if(p.name){$("lutname").value=p.name;if(typeof updateRebate==="function")updateRebate();}
+  rebuildCurves();render();
+}
+
+/* ================= undo / redo ================= */
+let history=[],hpos=-1,restoring=false;
+function snapshot(){
+  const g=buildGradeData();
+  g.baseLUT=baseLUT?{size:baseLUT.size,data:Array.from(baseLUT.data),name:baseLUT.name}:null;
+  g.baseOn=baseOn;
+  return JSON.stringify(g);
+}
+function restoreSnap(str){
+  const g=JSON.parse(str);
+  restoring=true;
+  if(g.baseLUT){
+    baseLUT={size:g.baseLUT.size,data:Float32Array.from(g.baseLUT.data),name:g.baseLUT.name};
+    baseOn=g.baseOn!==false;$("baseEnable").checked=baseOn;
+    $("basename").textContent=g.baseLUT.name+" ("+g.baseLUT.size+"\u00B3)";
+    $("baseinfo").style.display="block";
+  }else{baseLUT=null;$("baseinfo").style.display="none";}
+  applyGradeData(g);
+  if(typeof updateSecSwatch==="function")updateSecSwatch();
+  restoring=false;
+}
+function pushHistory(){
+  if(restoring)return;
+  const snap=snapshot();
+  if(hpos>=0&&history[hpos]===snap)return;
+  history=history.slice(0,hpos+1);
+  history.push(snap);
+  if(history.length>60)history.shift();
+  hpos=history.length-1;
+  updateUndoButtons();
+}
+function updateUndoButtons(){
+  $("undoBtn").disabled=hpos<=0;
+  $("redoBtn").disabled=hpos>=history.length-1;
+}
+function undo(){if(hpos>0){hpos--;restoreSnap(history[hpos]);updateUndoButtons();}}
+function redo(){if(hpos<history.length-1){hpos++;restoreSnap(history[hpos]);updateUndoButtons();}}
+$("undoBtn").addEventListener("click",undo);
+$("redoBtn").addEventListener("click",redo);
+document.addEventListener("keydown",e=>{
+  const k=e.key.toLowerCase();
+  if((e.ctrlKey||e.metaKey)&&k==="z"){
+    if(document.activeElement&&/INPUT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type!=="range")return;
+    e.preventDefault();e.shiftKey?redo():undo();
+  }else if((e.ctrlKey||e.metaKey)&&k==="y"){e.preventDefault();redo();}
+});
+
+/* storage: IndexedDB primary (large quota, wrapper-friendly), localStorage fallback */
+const store=(()=>{
+  let dbp=null;
+  function db(){
+    if(dbp)return dbp;
+    dbp=new Promise((res,rej)=>{
+      try{const r=indexedDB.open("lutsmith",1);
+        r.onupgradeneeded=()=>r.result.createObjectStore("kv");
+        r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
+      }catch(e){rej(e)}
+    });return dbp;
+  }
+  return{
+    async get(k){try{const d=await db();return await new Promise((res,rej)=>{const t=d.transaction("kv").objectStore("kv").get(k);t.onsuccess=()=>res(t.result??null);t.onerror=()=>rej(t.error);});}catch(e){try{return localStorage.getItem(k)}catch(_){return null}}},
+    async set(k,v){try{const d=await db();await new Promise((res,rej)=>{const t=d.transaction("kv","readwrite").objectStore("kv").put(v,k);t.onsuccess=res;t.onerror=()=>rej(t.error);});return true;}catch(e){try{localStorage.setItem(k,v);return true}catch(_){return false}}}
+  };
+})();
+
+
+
+/* ================= my looks (saved presets) ================= */
+let looks=[];
+async function looksLoad(){
+  try{
+    let raw=await store.get("lutsmith.looks");
+    if(raw==null){try{raw=localStorage.getItem("lutsmith.looks");}catch(e){}if(raw!=null)store.set("lutsmith.looks",raw);}
+    looks=raw?(JSON.parse(raw)||[]):[];
+    looks=looks.filter(lk=>!(lk.type==="cube"&&lk.volatile));
+    looks.forEach(lk=>{if(lk.type==="cube"&&lk.packed){lk.data=lk.packed.split(" ").map(Number);delete lk.packed;}});
+    looks=looks.filter(lk=>lk.type!=="cube"||(lk.data&&lk.data.length>=lk.size**3*3));
+  }catch(e){looks=[];}
+}
+function looksSerialisable(stripCubes){
+  return looks.map(lk=>{
+    if(lk.type!=="cube")return lk;
+    if(stripCubes)return{type:"cube",name:lk.name,size:lk.size,volatile:true};
+    return{type:"cube",name:lk.name,size:lk.size,packed:lk.data.map(v=>(+v).toFixed(4)).join(" ")};
+  });
+}
+function looksPersist(){
+  store.set("lutsmith.looks",JSON.stringify(looksSerialisable(false))).then(ok=>{
+    if(!ok)fail("Couldn't store looks on this device \u2014 they'll last for this session only.");
+  });
+}
+function looksRender(){
+  const list=$("looksList");list.innerHTML="";
+  $("looksEmpty").style.display=looks.length?"none":"block";
+  $("looksCount").textContent="Saved looks ("+looks.length+")";
+  looks.forEach((lk,idx)=>{
+    const row=document.createElement("div");row.className="look";
+    const swd=document.createElement("span");swd.className="lswatch";
+    let cols;try{cols=computeLookSwatch(lk);}catch(e){cols=new Array(6).fill("#3a3a3a");}
+    cols.forEach(col=>{const i2=document.createElement("i");i2.style.background=col;swd.appendChild(i2);});
+    const nm=document.createElement("span");nm.className="lname";nm.textContent=lk.name;nm.title="Apply "+lk.name;
+    const ty=document.createElement("span");ty.className="ltype";ty.textContent=lk.type==="cube"?"cube "+lk.size+"\u00B3":"grade";
+    const del=document.createElement("button");del.className="ldel";del.textContent="\u00D7";del.title="Remove from list";
+    nm.addEventListener("click",()=>{applyLook(lk);$("looksDD").classList.remove("open");});
+    del.addEventListener("click",()=>{looks.splice(idx,1);looksPersist();looksRender();});
+    row.append(swd,nm,ty,del);list.appendChild(row);
+  });
+}
+const SWATCH_IN=[[0.27,0.27,0.27],[0.65,0.65,0.65],[0.88,0.67,0.41],[0.69,0.21,0.24],[0.27,0.58,0.29],[0.31,0.36,0.65]];
+function sampleLutArr(data,N,r,g,b){
+  const m=N-1,rf=clamp(r)*m,gf=clamp(g)*m,bf=clamp(b)*m;
+  const r0=rf|0,g0=gf|0,b0=bf|0,r1=Math.min(r0+1,m),g1=Math.min(g0+1,m),b1=Math.min(b0+1,m);
+  const fr=rf-r0,fg=gf-g0,fb=bf-b0,idx=(R,G,B)=>((B*N+G)*N+R)*3,out=[0,0,0];
+  for(let ch=0;ch<3;ch++){
+    const c00=data[idx(r0,g0,b0)+ch]+(data[idx(r1,g0,b0)+ch]-data[idx(r0,g0,b0)+ch])*fr,
+          c10=data[idx(r0,g1,b0)+ch]+(data[idx(r1,g1,b0)+ch]-data[idx(r0,g1,b0)+ch])*fr,
+          c01=data[idx(r0,g0,b1)+ch]+(data[idx(r1,g0,b1)+ch]-data[idx(r0,g0,b1)+ch])*fr,
+          c11=data[idx(r0,g1,b1)+ch]+(data[idx(r1,g1,b1)+ch]-data[idx(r0,g1,b1)+ch])*fr;
+    const c0=c00+(c10-c00)*fg,c1=c01+(c11-c01)*fg;
+    out[ch]=clamp(c0+(c1-c0)*fb);
+  }
+  return out;
+}
+function computeLookSwatch(lk){
+  if(lk.type==="cube"){
+    const d=Float32Array.from(lk.data);
+    return SWATCH_IN.map(p=>{const o=sampleLutArr(d,lk.size,p[0],p[1],p[2]);
+      return`rgb(${o[0]*255|0},${o[1]*255|0},${o[2]*255|0})`;});
+  }
+  const snap=buildGradeData(),snapBase=baseLUT;
+  baseLUT=null;
+  applyDataSilent(lk.data);state.logMode=false;
+  const cols=SWATCH_IN.map(p=>{const o=grade(p[0],p[1],p[2]);
+    return`rgb(${o[0]*255|0},${o[1]*255|0},${o[2]*255|0})`;});
+  applyDataSilent(snap);state.logMode=snap.logMode;baseLUT=snapBase;
+  return cols;
+}
+function applyLook(lk){
+  if(lk.type==="grade"){applyGradeData(lk.data);pushHistory();}
+  else{
+    applyGradeData({app:"LUTsmith",state:{},curves:{},name:lk.name.replace(/\.cube$/i,"")});
+    baseLUT={size:lk.size,data:Float32Array.from(lk.data),name:lk.name};
+    baseOn=true;$("baseEnable").checked=true;
+    $("basename").textContent=lk.name+" ("+lk.size+"\u00B3)";
+    $("baseinfo").style.display="block";
+    render();pushHistory();
+  }
+}
+$("saveLook").addEventListener("click",()=>{
+  let name=($("lutname").value||"my_grade").trim();
+  const existing=looks.findIndex(l=>l.name===name&&l.type==="grade");
+  const entry={type:"grade",name,data:buildGradeData()};
+  if(existing>=0)looks[existing]=entry;else looks.push(entry);
+  looksPersist();looksRender();
+  $("looksDD").classList.add("open");
+});
+function parseCubeText(text){
+  const lines=text.split(/\r?\n/);let size=0;const vals=[];
+  for(const ln of lines){
+    const t=ln.trim();
+    if(!t||t[0]==="#")continue;
+    if(/^LUT_3D_SIZE/i.test(t)){size=parseInt(t.split(/\s+/)[1]);continue;}
+    if(/^(TITLE|DOMAIN_|LUT_1D)/i.test(t))continue;
+    const parts=t.split(/\s+/);
+    if(parts.length>=3&&!isNaN(+parts[0]))vals.push(+parts[0],+parts[1],+parts[2]);
+  }
+  if(!size||vals.length<size*size*size*3)throw new Error("not a valid 3D cube file");
+  return{size,vals};
+}
+$("addLookCube").addEventListener("click",()=>$("lookCubeFile").click());
+$("lookCubeFile").addEventListener("change",e=>{
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const{size,vals}=parseCubeText(reader.result);
+      looks.push({type:"cube",name:file.name,size,data:vals.map(v=>+v.toFixed(6))});
+      looksPersist();looksRender();
+    }catch(err){fail("Couldn't add LUT: "+err.message);}
+  };
+  reader.readAsText(file);
+  e.target.value="";
+});
+$("looksToggle").addEventListener("click",e=>{
+  e.stopPropagation();
+  $("looksDD").classList.toggle("open");
+});
+document.addEventListener("click",e=>{
+  if(!$("looksDD").contains(e.target))$("looksDD").classList.remove("open");
+});
+function updateSecSwatch(){$("secSwatch").style.background=`hsl(${state.secHueC} 70% 45%)`;}
+$("secHueC").addEventListener("input",updateSecSwatch);
+$("secReset").addEventListener("click",e=>{
+  e.stopPropagation();
+  ["secHueC","secHue","secSat","secLum"].forEach(id=>setSliderUI(id,0));
+  setSliderUI("secRange",40);setSliderUI("secSoft",50);
+  updateSecSwatch();render();pushHistory();
+});
+updateSecSwatch();
+
+/* per-section + master resets */
+function setS(id,v){const el=$(id);if(!el)return;v=Math.max(+el.min,Math.min(+el.max,v));state[id]=v;el.value=v;const n=el.parentElement.querySelector(".num");if(n)n.value=v;}
+function resetGroup(ids,render2=true){ids.forEach(id=>setS(id,DEF[id]||0));if(render2)render();}
+$("toneReset").addEventListener("click",e=>{
+  e.stopPropagation();
+  resetGroup(["exposure","contrast","highlights","shadows","blacks","gamma","fade"]);
+  pushHistory();
+});
+$("colReset").addEventListener("click",e=>{e.stopPropagation();resetGroup(["temp","tint","sat","vib","skin"]);pushHistory();});
+$("splitReset").addEventListener("click",e=>{e.stopPropagation();setS("shAmt",0);setS("hiAmt",0);state.shCol=hex2rgb("#406080");$("shCol").value="#406080";state.hiCol=hex2rgb("#e0a060");$("hiCol").value="#e0a060";render();pushHistory();});
+$("resetAll").addEventListener("click",()=>{
+  sliders.forEach(id=>setS(id,DEF[id]||0));
+  state.shCol=hex2rgb("#406080");$("shCol").value="#406080";
+  state.hiCol=hex2rgb("#e0a060");$("hiCol").value="#e0a060";
+  state.logMode=false;$("logMode").checked=false;
+  ["m","r","g","b"].forEach(ch=>curves[ch]=defCurve());
+  hueShift.fill(0);hueSat.fill(0);lumaSat.fill(0);
+  cbState.shadows={x:0,y:0};cbState.midtones={x:0,y:0};cbState.highlights={x:0,y:0};
+  drawColorWheel($("cbSh"),0,0);drawColorWheel($("cbMd"),0,0);drawColorWheel($("cbHi"),0,0);
+  baseLUT=null;baseOn=true;$("baseEnable").checked=true;$("baseinfo").style.display="none";
+  if(typeof updateSecSwatch==="function")updateSecSwatch();
+  rebuildCurves();render();pushHistory();
+});
+
+/* collapsible sections */
+document.querySelectorAll("aside section h2").forEach(h=>{
+  h.addEventListener("click",e=>{
+    if(e.target.closest(".reset"))return;
+    h.parentElement.classList.toggle("closed");
+  });
+});
+
+looksLoad().then(looksRender);
+
+/* ================= project save / load ================= */
+async function tauriSave(name,data,isBinary){
+  const T=window.__TAURI__;if(!T||!T.dialog||!T.fs)return false;
+  try{const path=await T.dialog.save({defaultPath:name});if(path===null)return true;
+    if(isBinary)await T.fs.writeFile(path,data);else await T.fs.writeTextFile(path,data);return true;
+  }catch(e){return false;}
+}
+function download(name,text,type){
+  tauriSave(name,text,false).then(handled=>{
+    if(handled)return;
+    const blob=new Blob([text],{type});
+    try{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
+    catch(err){const reader=new FileReader();reader.onload=()=>{const a=document.createElement("a");a.href=reader.result;a.download=name;a.click();};reader.readAsDataURL(blob);}
+  });
+}
+$("saveProj").addEventListener("click",()=>{
+  download(($("lutname").value||"project")+".lutsmith.json",JSON.stringify(buildGradeData(),null,1),"application/json");
+});
+$("loadProj").addEventListener("click",()=>$("projfile").click());
+$("projfile").addEventListener("change",e=>{
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{applyGradeData(JSON.parse(reader.result));pushHistory();}
+    catch(err){fail("Couldn't load project: "+err.message);}
+  };
+  reader.readAsText(file);
+  e.target.value="";
+});
+
+/* ================= remove photo ================= */
+function removeImage(idx){
+  if(idx<0||idx>=images.length)return;
+  images[idx].wrap.remove();
+  images.splice(idx,1);
+  if(images.length===0){
+    cur=-1;lastOut=null;
+    $("filmframe").style.display="none";
+    $("stagebar").style.display="none";
+    $("thumbs").style.display="none";
+    $("scopes").style.display="none";
+    $("drop").style.display="block";
+    $("export").disabled=true;
+    return;
+  }
+  $("thumbs").style.display=images.length>1?"flex":"none";
+  selectImage(Math.min(cur>idx?cur-1:cur,images.length-1));
+}
+$("removephoto").addEventListener("click",()=>{if(cur>=0)removeImage(cur);});
+
+/* ================= A/B grade slots ================= */
+const slots={A:null,B:null};let activeSlot="A";
+function switchSlot(which){
+  if(which===activeSlot)return;
+  slots[activeSlot]=buildGradeData();
+  activeSlot=which;
+  $("slotA").classList.toggle("on",which==="A");
+  $("slotB").classList.toggle("on",which==="B");
+  if(slots[which])applyGradeData(slots[which]);
+  else slots[which]=buildGradeData();
+}
+$("slotA").addEventListener("click",()=>switchSlot("A"));
+$("slotB").addEventListener("click",()=>switchSlot("B"));
+$("slotCopy").addEventListener("click",()=>{
+  slots[activeSlot==="A"?"B":"A"]=buildGradeData();
+  $("slotCopy").textContent="copied";
+  setTimeout(()=>$("slotCopy").textContent="copy \u2192",900);
+});
+
+/* ================= save graded photo ================= */
+function saveBlob(name,blob){
+  blob.arrayBuffer().then(buf=>tauriSave(name,new Uint8Array(buf),true)).then(handled=>{
+    if(handled)return;
+    try{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),3000);}
+    catch(err){const reader=new FileReader();reader.onload=()=>{const a=document.createElement("a");a.href=reader.result;a.download=name;a.click();};reader.readAsDataURL(blob);}
+  }).catch(()=>{});
+}
+function gradedFilename(imgName){
+  const base=(imgName||"photo").replace(/\.[^.]+$/,"");
+  const lut=($("lutname").value||"graded").replace(/[^\w-]+/g,"_");
+  return base+"_"+lut+".jpg";
+}
+function exportGradedFrom(idata,imgName,btn){
+  const N=33,plut=new Float32Array(N*N*N*3);
+  let i=0;
+  for(let b=0;b<N;b++)for(let g=0;g<N;g++)for(let r=0;r<N;r++){
+    const o=grade(r/(N-1),g/(N-1),b/(N-1));
+    plut[i++]=o[0];plut[i++]=o[1];plut[i++]=o[2];
+  }
+  const out=applyLut(idata,plut,N);
+  const cv=document.createElement("canvas");cv.width=idata.width;cv.height=idata.height;
+  cv.getContext("2d").putImageData(out,0,0);
+  cv.toBlob(blob=>{
+    if(blob)saveBlob(gradedFilename(imgName),blob);
+    else fail("Couldn't encode the graded photo.");
+    btn.disabled=false;btn.textContent="Save graded photo";
+  },"image/jpeg",0.93);
+}
+$("savephoto").addEventListener("click",()=>{
+  if(cur<0)return;
+  const im=images[cur],btn=$("savephoto");
+  btn.disabled=true;btn.textContent="Saving\u2026";
+  if(im.srcURL){
+    const img=new Image();
+    img.onerror=()=>{exportGradedFrom(im.data,im.name,btn);};
+    img.onload=()=>{
+      try{
+        const cap=8192,sc=Math.min(1,cap/Math.max(img.width,img.height));
+        const w=Math.round(img.width*sc),h=Math.round(img.height*sc);
+        const cv=document.createElement("canvas");cv.width=w;cv.height=h;
+        cv.getContext("2d").drawImage(img,0,0,w,h);
+        exportGradedFrom(cv.getContext("2d").getImageData(0,0,w,h),im.name,btn);
+      }catch(err){exportGradedFrom(im.data,im.name,btn);}
+    };
+    img.src=im.srcURL;
+  }else{
+    exportGradedFrom(im.data,im.name,btn);
+  }
+});
+
+/* ================= LUT export ================= */
+$("export").addEventListener("click",()=>{
+  const N=+$("lutsize").value;
+  const safeTitle=($("lutname").value||"my_grade").replace(/["\r\n]/g,"");
+  const head=`# Created with LUTsmith\nTITLE "${safeTitle}"\nLUT_3D_SIZE ${N}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n`;
+  const lines=[];
+  for(let b=0;b<N;b++)for(let g=0;g<N;g++)for(let r=0;r<N;r++){
+    const o=grade(r/(N-1),g/(N-1),b/(N-1));
+    lines.push(o[0].toFixed(6)+" "+o[1].toFixed(6)+" "+o[2].toFixed(6));
+  }
+  const name=($("lutname").value||"my_grade").replace(/[^\w-]+/g,"_")+".cube";
+  download(name,head+lines.join("\n")+"\n","text/plain");
+});
+
+function updateRebate(){
+  $("rebatename").textContent=($("lutname").value||"my_grade").toUpperCase().replace(/[^\w-]+/g,"_")+" \u25B8 "+$("lutsize").value;
+}
+$("lutname").addEventListener("input",updateRebate);
+$("lutsize").addEventListener("change",updateRebate);
+updateRebate();
+/* ================= export look pack ================= */
+function cubeTextFromGrade(name,N){
+  const head=`TITLE "${name}"\nLUT_3D_SIZE ${N}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n`;
+  const lines=[];
+  for(let b=0;b<N;b++)for(let g=0;g<N;g++)for(let r=0;r<N;r++){
+    const o=grade(r/(N-1),g/(N-1),b/(N-1));
+    lines.push(o[0].toFixed(6)+" "+o[1].toFixed(6)+" "+o[2].toFixed(6));
+  }
+  return head+lines.join("\n")+"\n";
+}
+$("exportPack").addEventListener("click",()=>{
+  if(!looks.length){fail("No saved looks to export yet — save a look first.");return;}
+  const N=+$("lutsize").value;
+  const snap=buildGradeData(),snapBase=baseLUT;
+  const files=[];
+  looks.forEach(lk=>{
+    const fname=lk.name.replace(/\.cube$/i,"").replace(/[^\w-]+/g,"_")+".cube";
+    if(lk.type==="cube"){
+      const head=`TITLE "${lk.name}"\nLUT_3D_SIZE ${lk.size}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n`;
+      const lines=[];
+      for(let i=0;i<lk.data.length;i+=3)lines.push(lk.data[i].toFixed(6)+" "+lk.data[i+1].toFixed(6)+" "+lk.data[i+2].toFixed(6));
+      files.push({name:fname,text:head+lines.join("\n")+"\n"});
+    }else{
+      baseLUT=null;applyDataSilent(lk.data);
+      files.push({name:fname,text:cubeTextFromGrade(lk.name,N)});
+    }
+  });
+  applyDataSilent(snap);state.logMode=snap.logMode;baseLUT=snapBase;
+  files.forEach((f,i)=>setTimeout(()=>download(f.name,f.text,"text/plain"),i*450));
+  $("exportPack").textContent="Exporting "+files.length+" file"+(files.length>1?"s":"")+"\u2026";
+  setTimeout(()=>$("exportPack").textContent="Export look pack \u2014 every saved look as .cube",files.length*450+800);
+});
+
+/* ================= cube analysis (current grade) ================= */
+const chL=$("cubeHistL"),chLctx=chL.getContext("2d");
+const chRgb=$("cubeHistRgb"),chRgbctx=chRgb.getContext("2d");
+const chHeat=$("cubeHeat"),chHeatCtx=chHeat.getContext("2d");
+const chStats=$("cubeStats");
+const chMini=$("cubeMiniSwatches");
+const chLabel=$("cubePanelLabel");
+const chSizeBtn=$("cubePanelSize");
+
+const ANALYSIS_SIZES=[17,33,65];
+let analysisSize=17;
+let analysisPending=false;
+let analysisRunning=false;
+
+function buildAnalysisCube(N,dst){
+  let p=0;
+  for(let b=0;b<N;b++){
+    const B=b/(N-1);
+    for(let g=0;g<N;g++){
+      const G=g/(N-1);
+      for(let r=0;r<N;r++){
+        const R=r/(N-1);
+        const wasLog=state.logMode;
+        state.logMode=false;
+        const o=grade(R,G,B);
+        state.logMode=wasLog;
+        dst[p++]=o[0];
+        dst[p++]=o[1];
+        dst[p++]=o[2];
+      }
+    }
+  }
+}
+
+function drawAnalysisHeat(lut){
+  const N=lut.size,W=chHeat.width,H=chHeat.height;
+  const cell=Math.max(1,Math.floor(W/N));
+  const W2=cell*N,H2=cell*N;
+  const img=chHeatCtx.createImageData(W2,H2);
+  const gFix=N>>1;
+  for(let b=0;b<N;b++){
+    for(let r=0;r<N;r++){
+      const idx=((b*N+gFix)*N+r)*3;
+      const R=Math.round(lut.data[idx]*255),
+            G=Math.round(lut.data[idx+1]*255),
+            B=Math.round(lut.data[idx+2]*255);
+      for(let py=0;py<cell;py++){
+        for(let px=0;px<cell;px++){
+          const p=((b*cell+py)*W2+(r*cell+px))*4;
+          img.data[p]=R;img.data[p+1]=G;img.data[p+2]=B;img.data[p+3]=255;
+        }
+      }
+    }
+  }
+  chHeatCtx.clearRect(0,0,chHeat.width,chHeat.height);
+  chHeatCtx.putImageData(img,0,0);
+  chHeatCtx.strokeStyle="rgba(0,0,0,0.4)";chHeatCtx.lineWidth=0.5;
+  for(let i=0;i<=N;i+=Math.max(1,Math.floor(N/8))){
+    chHeatCtx.beginPath();
+    chHeatCtx.moveTo(i*cell+0.5,0);chHeatCtx.lineTo(i*cell+0.5,H2);
+    chHeatCtx.moveTo(0,i*cell+0.5);chHeatCtx.lineTo(W2,i*cell+0.5);
+    chHeatCtx.stroke();
+  }
+  chHeatCtx.strokeStyle="rgba(255,255,255,0.2)";chHeatCtx.lineWidth=1;
+  chHeatCtx.strokeRect(0.5,0.5,W2-1,H2-1);
+}
+
+function drawAnalysisHistograms(lut){
+  const N=lut.size,binsL=new Float64Array(48),binsR=new Float64Array(48),binsG=new Float64Array(48),binsB=new Float64Array(48);
+  let sumR=0,sumG=0,sumB=0,sumL=0,minL=1,maxL=0,minR=1,maxR=0,minG=1,maxG=0,minB=1,maxB=0;
+  for(let i=0;i<lut.data.length;i+=3){
+    const R=lut.data[i],G=lut.data[i+1],B=lut.data[i+2];
+    const L=0.2126*R+0.7152*G+0.0722*B;
+    binsL[Math.min(47,(L*47)|0)]++;
+    binsR[Math.min(47,(R*47)|0)]++;
+    binsG[Math.min(47,(G*47)|0)]++;
+    binsB[Math.min(47,(B*47)|0)]++;
+    sumR+=R;sumG+=G;sumB+=B;sumL+=L;
+    if(L<minL)minL=L;if(L>maxL)maxL=L;
+    if(R<minR)minR=R;if(R>maxR)maxR=R;
+    if(G<minG)minG=G;if(G>maxG)maxG=G;
+    if(B<minB)minB=B;if(B>maxB)maxB=B;
+  }
+  const total=lut.data.length/3;
+
+  chLctx.fillStyle="#0d0c09";chLctx.fillRect(0,0,chL.width,chL.height);
+  let mx=1;for(const v of binsL)if(v>mx)mx=v;
+  chLctx.fillStyle="rgba(232,226,212,0.85)";
+  for(let k=0;k<48;k++){
+    const hgt=Math.pow(binsL[k]/mx,0.5)*(chL.height-4);
+    chLctx.fillRect(k*chL.width/48,chL.height-hgt,chL.width/48-0.5,hgt);
+  }
+  chLctx.strokeStyle="rgba(255,255,255,0.18)";chLctx.lineWidth=1;
+  chLctx.beginPath();chLctx.moveTo(0,chL.height-0.5);chLctx.lineTo(chL.width,chL.height-0.5);chLctx.stroke();
+
+  chRgbctx.fillStyle="#0d0c09";chRgbctx.fillRect(0,0,chRgb.width,chRgb.height);
+  mx=1;
+  binsR.forEach(v=>{if(v>mx)mx=v;});
+  binsG.forEach(v=>{if(v>mx)mx=v;});
+  binsB.forEach(v=>{if(v>mx)mx=v;});
+  chRgbctx.globalCompositeOperation="screen";
+  const colsRgb=["rgba(230,80,70,0.85)","rgba(110,210,110,0.85)","rgba(100,140,240,0.85)"];
+  [binsR,binsG,binsB].forEach((bins,ci)=>{
+    chRgbctx.fillStyle=colsRgb[ci];
+    for(let k=0;k<48;k++){
+      const hgt=Math.pow(bins[k]/mx,0.5)*(chRgb.height-4);
+      chRgbctx.fillRect(k*chRgb.width/48,chRgb.height-hgt,chRgb.width/48-0.5,hgt);
+    }
+  });
+  chRgbctx.globalCompositeOperation="source-over";
+
+  const satCount=countSaturated(lut);
+  const avgR=sumR/total,avgG=sumG/total,avgB=sumB/total;
+  chStats.innerHTML=
+    `<b>${N}³</b> &middot; ${total.toLocaleString()} samples<br>`+
+    `Luma  min <b>${(minL*100).toFixed(1)}%</b>  avg <b>${(sumL/total*100).toFixed(1)}%</b>  max <b>${(maxL*100).toFixed(1)}%</b><br>`+
+    `R     min <b>${(minR*100).toFixed(1)}%</b>  avg <b>${(avgR*100).toFixed(1)}%</b>  max <b>${(maxR*100).toFixed(1)}%</b><br>`+
+    `G     min <b>${(minG*100).toFixed(1)}%</b>  avg <b>${(avgG*100).toFixed(1)}%</b>  max <b>${(maxG*100).toFixed(1)}%</b><br>`+
+    `B     min <b>${(minB*100).toFixed(1)}%</b>  avg <b>${(avgB*100).toFixed(1)}%</b>  max <b>${(maxB*100).toFixed(1)}%</b><br>`+
+    `Saturated &ge;99%  <b>${satCount}</b> sample${satCount===1?"":"s"}`;
+
+  drawAnalysisMiniSwatches(lut);
+}
+
+function countSaturated(lut){
+  let c=0;
+  for(let i=0;i<lut.data.length;i+=3){
+    if(lut.data[i]>=0.99&&lut.data[i+1]>=0.99&&lut.data[i+2]>=0.99)c++;
+  }
+  return c;
+}
+
+function drawAnalysisMiniSwatches(lut){
+  const N=lut.size,d=lut.data;
+  const sample=(r,g,b)=>{
+    const m=N-1,rf=clamp(r)*m,gf=clamp(g)*m,bf=clamp(b)*m;
+    const r0=rf|0,g0=gf|0,b0=bf|0,r1=Math.min(r0+1,m),g1=Math.min(g0+1,m),b1=Math.min(b0+1,m);
+    const fr=rf-r0,fg=gf-g0,fb=bf-b0,idx=(R,G,B)=>((B*N+G)*N+R)*3;
+    const out=[];
+    for(let ch=0;ch<3;ch++){
+      const c00=d[idx(r0,g0,b0)+ch]+(d[idx(r1,g0,b0)+ch]-d[idx(r0,g0,b0)+ch])*fr,
+            c10=d[idx(r0,g1,b0)+ch]+(d[idx(r1,g1,b0)+ch]-d[idx(r0,g1,b0)+ch])*fr,
+            c01=d[idx(r0,g0,b1)+ch]+(d[idx(r1,g0,b1)+ch]-d[idx(r0,g0,b1)+ch])*fr,
+            c11=d[idx(r0,g1,b1)+ch]+(d[idx(r1,g1,b1)+ch]-d[idx(r0,g1,b1)+ch])*fr;
+      const c0=c00+(c10-c00)*fg,c1=c01+(c11-c01)*fg;
+      out[ch]=c0+(c1-c0)*fb;
+    }
+    return out;
+  };
+  chMini.innerHTML="";
+  const labels=["#444","#aaa","#dfaa69","#b03639","#46944a","#505ba6"];
+  SWATCH_IN.forEach((p,i)=>{
+    const o=sample(p[0],p[1],p[2]);
+    const sw=document.createElement("div");
+    sw.setAttribute("data-in",labels[i]);
+    sw.style.background=`rgb(${Math.round(clamp(o[0])*255)},${Math.round(clamp(o[1])*255)},${Math.round(clamp(o[2])*255)})`;
+    chMini.appendChild(sw);
+  });
+}
+
+function renderCubeAnalysis(){
+  if(analysisRunning)return;
+  analysisRunning=true;
+  const N=analysisSize;
+  chLabel.textContent="Output "+N+"³ preview";
+  chSizeBtn.textContent=N+"³";
+  setTimeout(()=>{
+    const data=new Float32Array(N*N*N*3);
+    buildAnalysisCube(N,data);
+    const lut={size:N,data,name:"current grade"};
+    drawAnalysisHeat(lut);
+    drawAnalysisHistograms(lut);
+    analysisRunning=false;
+  },0);
+}
+
+function scheduleCubeAnalysis(){
+  if(analysisPending)return;
+  analysisPending=true;
+  requestAnimationFrame(()=>{
+    analysisPending=false;
+    renderCubeAnalysis();
+  });
+}
+
+chSizeBtn.addEventListener("click",()=>{
+  const idx=ANALYSIS_SIZES.indexOf(analysisSize);
+  analysisSize=ANALYSIS_SIZES[(idx+1)%ANALYSIS_SIZES.length];
+  renderCubeAnalysis();
+});
+
+renderCubeAnalysis();
+
+render();
+pushHistory();
+</script>
+</body>
+</html>
