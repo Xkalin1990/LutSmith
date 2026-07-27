@@ -2,7 +2,9 @@
 
 A visual colour-grading tool that turns a photo into a `.cube` 3D LUT you can load anywhere — in-camera real-time LUTs, Resolve, Premiere, Final Cut, Photoshop.
 
-Grade an image with familiar controls, watch the result live, then export the grade as a standard LUT file. Free, open source, and entirely offline: it's a single HTML file with no build step, no server, no account, and no network calls.
+Free for personal and non-commercial use ([CC BY-NC 4.0](LICENSE)) — see the Licence section below.
+
+Grade an image with familiar controls, watch the result live, then export the grade as a standard LUT file. Free and entirely offline: it's a single HTML file with no build step, no server, no account, and no network calls.
 
 ## Quick start
 
@@ -81,4 +83,4 @@ Film-stock names are trademarks of their respective owners and are used here onl
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+CC BY-NC 4.0 — free to use, modify and share, but **not for commercial use** (no selling the app, selling copies or modified versions, or bundling it into a paid product) without permission. See [LICENSE](LICENSE) or the [full legal text](https://creativecommons.org/licenses/by-nc/4.0/legalcode).
