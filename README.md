@@ -16,7 +16,7 @@ cd LutSmith
 # open lutsmith.html in any modern browser
 ```
 
-Or use the hosted version at `https://xkalin1990.github.io/LutSmith/index.html)`
+Or use the hosted version at `https://xkalin1990.github.io/LutSmith/index.html`
 
 Because everything runs locally in the browser, your photos are never uploaded anywhere.
 
