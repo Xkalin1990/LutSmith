@@ -834,10 +834,8 @@ function drawClipping(out,wipeXc,wipeOn){
     const lo=r<=1&&g<=1&&b<=1;
     if(!hi&&!lo)continue;
     // respect the wipe: only overlay on the graded side
-    if(wipeOn){
-      const x=(p/4)%W;
-      if(x<wipePx)continue;
-    }
+    const x=(p/4)%W;
+    if(wipeOn&&x<wipePx)continue;
     const cR=hi?HI_CORE_R:LO_CORE_R,cG=hi?HI_CORE_G:LO_CORE_G,cB=hi?HI_CORE_B:LO_CORE_B;
     const hR=hi?HI_HALO_R:LO_HALO_R,hG=hi?HI_HALO_G:LO_HALO_G,hB=hi?HI_HALO_B:LO_HALO_B;
     // 1-pixel solid core
