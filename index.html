@@ -1499,28 +1499,70 @@ $("exSingleF").addEventListener("change",e=>{
        Each bin's weight is capped so one large area (a big sky) can't dominate. */
     const minCount=Math.max(8,n/stride*0.004);
     const wCap=n/stride*0.12;
+
+    /* Fit offset(x) = a + b*x + c*x^2, where x = L - 0.5.
+       "a" is the overall cast, "b" the shadow-to-highlight tilt (split toning)
+       and "c" lets the MIDTONES sit off that straight line, which is how a lot
+       of real film looks actually behave: cool shadows and cool highlights with
+       warm mids, say, is impossible to describe with a straight line.
+       Three parameters per channel is still far fewer than the fourteen bins,
+       so it stays stable, and we fall back to a line (then to a constant) when
+       there aren't enough populated bins to support the extra term. */
     const fit=offCh=>{
-      let sw=0,swx=0,swy=0,swxx=0,swxy=0;
+      let S0=0,S1=0,S2=0,S3=0,S4=0,T0=0,T1=0,T2=0,used=0;
       for(let i=0;i<NB;i++){
         if(cnt[i]<minCount)continue;
-        const lm=sL[i], off=offCh[i];
-        const w=Math.min(cnt[i],wCap), x=lm-0.5;
-        sw+=w;swx+=w*x;swy+=w*off;swxx+=w*x*x;swxy+=w*x*off;
+        const w=Math.min(cnt[i],wCap), x=sL[i]-0.5, y=offCh[i];
+        const x2=x*x;
+        S0+=w;S1+=w*x;S2+=w*x2;S3+=w*x2*x;S4+=w*x2*x2;
+        T0+=w*y;T1+=w*x*y;T2+=w*x2*y;
+        used++;
       }
-      if(sw<=0)return{a:0,b:0};
-      const den=sw*swxx-swx*swx;
-      let b=Math.abs(den)>1e-9?(sw*swxy-swx*swy)/den:0;
-      let a=(swy-b*swx)/sw;
-      // keep the look plausible: cap the overall cast and the tilt
+      if(S0<=0)return{a:0,b:0,c:0};
+
+      // weighted linear solution (also the fallback)
+      const lden=S0*S2-S1*S1;
+      let lb=Math.abs(lden)>1e-12?(S0*T1-S1*T0)/lden:0;
+      let la=(T0-lb*S1)/S0;
+
+      let a=la,b=lb,c=0;
+      if(used>=5){
+        // solve the 3x3 normal equations by Cramer's rule
+        const det=S0*(S2*S4-S3*S3)-S1*(S1*S4-S3*S2)+S2*(S1*S3-S2*S2);
+        if(Math.abs(det)>1e-14){
+          const da=T0*(S2*S4-S3*S3)-S1*(T1*S4-S3*T2)+S2*(T1*S3-S2*T2);
+          const db=S0*(T1*S4-S3*T2)-T0*(S1*S4-S3*S2)+S2*(S1*T2-T1*S2);
+          const dc=S0*(S2*T2-T1*S3)-S1*(S1*T2-T1*S2)+T0*(S1*S3-S2*S2);
+          const qa=da/det,qb=db/det,qc=dc/det;
+          // only accept the curved fit if the extra term is a sane magnitude;
+          // a wild quadratic means the bins were noisy, so keep the line
+          if(Math.abs(qc)<=0.9&&Math.abs(qa)<=0.2&&Math.abs(qb)<=0.6){a=qa;b=qb;c=qc;}
+        }
+      }
+      // keep the look plausible
       a=Math.max(-0.10,Math.min(0.10,a));
       b=Math.max(-0.20,Math.min(0.20,b));
-      return{a,b};
+      c=Math.max(-0.35,Math.min(0.35,c));
+      return{a,b,c};
     };
-    const build=sCh=>{
-      const{a,b}=fit(sCh);
+    const build=offCh=>{
+      const{a,b,c}=fit(offCh);
+      /* The overall cast "a" is the most reliable part of the model. The tilt
+         and curvature describe how it varies, but in a real photograph they
+         also pick up content bleed (a bright neutral sky in a warm frame will
+         tilt the highlights cool). Allow the cast to weaken or strengthen with
+         luminance, but not to INVERT far past neutral: a warm look should not
+         end up cool at one end because of what happened to be in the frame.
+         The tolerance scales with the cast, so a genuinely neutral reference
+         is unaffected. */
+      const tol=Math.max(0.012,Math.abs(a)*0.35);
       const pts=[];
-      for(const x of [0,0.25,0.5,0.75,1]){
-        const off=a+b*(x-0.5);
+      // more sample points now the model can curve
+      for(const x of [0,0.15,0.3,0.5,0.7,0.85,1]){
+        const t=x-0.5;
+        let off=a+b*t+c*t*t;
+        if(a>0.002)off=Math.max(off,-tol);
+        else if(a<-0.002)off=Math.min(off,tol);
         pts.push({x,y:Math.max(0,Math.min(1,x+off))});
       }
       // keep it monotonic so the curve can't band or invert
