@@ -1440,17 +1440,52 @@ $("exSingleF").addEventListener("change",e=>{
        measured offset, which is exactly a shadow/midtone/highlight tint. */
 
     const NB=14;
-    const cnt=new Float64Array(NB),sL=new Float64Array(NB),
-          sR=new Float64Array(NB),sG=new Float64Array(NB),sB=new Float64Array(NB);
     let chroma=0;
     const lumHist=new Float64Array(256);
-    for(let p=0;p<d.data.length;p+=4){
+    /* Collect the per-pixel colour offsets per luminance bin so we can take a
+       TRIMMED MEDIAN later. A mean is dragged around by a few extreme pixels;
+       a trimmed median ignores them, which matters when one saturated object
+       sits inside a single luminance band.
+
+       Each pixel is also WEIGHTED BY HOW NEUTRAL IT IS. A strongly coloured
+       object (a red running track, a yellow vest) is subject matter, not
+       grading, and weighting every pixel equally lets those objects drag the
+       measured cast toward their own hue. On a near-neutral pixel any colour
+       present must BE the cast, so those pixels carry the real information.
+       This is the same reasoning behind classic illuminant estimation. */
+    const binsR=[],binsG=[],binsB=[],binsL=[],binW=new Float64Array(NB);
+    for(let i=0;i<NB;i++){binsR.push([]);binsG.push([]);binsB.push([]);binsL.push([]);}
+    const stride=(n>200000)?8:4;   // subsample very large references for speed
+    for(let p=0;p<d.data.length;p+=4*(stride/4)){
       const r=d.data[p]/255,g=d.data[p+1]/255,b=d.data[p+2]/255;
       const l=0.2126*r+0.7152*g+0.0722*b;
       lumHist[Math.min(255,Math.round(l*255))]++;
-      chroma+=Math.max(r,g,b)-Math.min(r,g,b);
+      const cr=Math.max(r,g,b)-Math.min(r,g,b);
+      chroma+=cr;
+      // neutral weighting: full weight at zero chroma, falling away as the
+      // pixel gets more colourful. 0.18 chroma is already a vivid object.
+      const w=1/(1+Math.pow(cr/0.18,2));
+      if(w<0.05)continue;                      // vivid subject: no cast info
       const i=Math.min(NB-1,Math.floor(l*NB));
-      cnt[i]++;sL[i]+=l;sR[i]+=r;sG[i]+=g;sB[i]+=b;
+      binsR[i].push(r-l);binsG[i].push(g-l);binsB[i].push(b-l);binsL[i].push(l);
+      binW[i]+=w;
+    }
+    // trimmed median of each bin's offsets (drop the outer 20% each side)
+    const trimmed=arr=>{
+      if(!arr.length)return 0;
+      const a=arr.slice().sort((x,y)=>x-y);
+      const lo=Math.floor(a.length*0.2),hi=Math.ceil(a.length*0.8);
+      let sum=0,c=0;
+      for(let k=lo;k<hi;k++){sum+=a[k];c++;}
+      return c?sum/c:a[Math.floor(a.length/2)];
+    };
+    const cnt=new Float64Array(NB),sL=new Float64Array(NB),
+          offR=new Float64Array(NB),offG=new Float64Array(NB),offB=new Float64Array(NB);
+    for(let i=0;i<NB;i++){
+      cnt[i]=binW[i];
+      if(!binsL[i].length)continue;
+      sL[i]=trimmed(binsL[i]);
+      offR[i]=trimmed(binsR[i]);offG[i]=trimmed(binsG[i]);offB[i]=trimmed(binsB[i]);
     }
 
     /* Fit a SMOOTH model to the measured offsets rather than trusting each bin.
@@ -1462,13 +1497,13 @@ $("exSingleF").addEventListener("change",e=>{
        luminance, which is the scene, not the look. A straight line through
        them keeps the coherent cast and discards the swing.
        Each bin's weight is capped so one large area (a big sky) can't dominate. */
-    const minCount=Math.max(20,n*0.004);
-    const wCap=n*0.12;
-    const fit=sCh=>{
+    const minCount=Math.max(8,n/stride*0.004);
+    const wCap=n/stride*0.12;
+    const fit=offCh=>{
       let sw=0,swx=0,swy=0,swxx=0,swxy=0;
       for(let i=0;i<NB;i++){
         if(cnt[i]<minCount)continue;
-        const lm=sL[i]/cnt[i], off=sCh[i]/cnt[i]-lm;
+        const lm=sL[i], off=offCh[i];
         const w=Math.min(cnt[i],wCap), x=lm-0.5;
         sw+=w;swx+=w*x;swy+=w*off;swxx+=w*x*x;swxy+=w*x*off;
       }
@@ -1494,7 +1529,7 @@ $("exSingleF").addEventListener("change",e=>{
     };
 
     applyGradeData({app:"LUTsmith",state:{},curves:{},name:$("lutname").value});
-    curves.r=build(sR);curves.g=build(sG);curves.b=build(sB);
+    curves.r=build(offR);curves.g=build(offG);curves.b=build(offB);
 
     /* Tone: only the black lift is safely inferable from a single photo. A
        reference whose darkest pixels sit well above black is a faded/matte
@@ -1507,7 +1542,7 @@ $("exSingleF").addEventListener("change",e=>{
     /* Saturation: only act on clear desaturation, which is usually a grading
        choice. High chroma is more often just a colourful subject, so we don't
        crank saturation up on that evidence. */
-    const meanChroma=chroma/n;
+    const meanChroma=chroma/(n/stride);
     if(meanChroma<0.12)setS("sat",Math.max(-45,(meanChroma/0.12-1)*60));
 
     rebuildCurves();render();pushHistory();
