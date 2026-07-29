@@ -1435,36 +1435,41 @@ $("exSingleF").addEventListener("change",e=>{
     // cumulative distribution per channel
     const cdf=h.map(ch=>{const c=new Float64Array(256);let a=0;for(let i=0;i<256;i++){a+=ch[i];c[i]=a/n;}return c;});
     const level=(c,q)=>{for(let i=0;i<256;i++)if(c[i]>=q)return i/255;return 1;};
-    // HISTOGRAM MATCHING: map each channel's percentiles onto a neutral target
-    // ramp. This linearises every channel, removing colour casts and recovering
-    // contrast far more faithfully than matching channel means alone.
-    const qs=[0.02,0.25,0.5,0.75,0.98],tg=[0.04,0.27,0.5,0.73,0.96];
+    /* HISTOGRAM MATCHING, reference direction.
+       We want a grade that RECREATES the reference look on the user's own
+       photo, so each curve must map a typical/neutral input distribution ONTO
+       the reference's distribution: x = where a normal photo sits at a given
+       percentile, y = where the reference sits at that same percentile.
+       (Mapping it the other way round would strip the look out of the
+       reference instead of reproducing it.) */
+    const qs=[0.02,0.10,0.25,0.50,0.75,0.90,0.98];
+    const src=[0.02,0.10,0.25,0.50,0.75,0.90,0.98];   // assumed neutral input
     const mkCurve=c=>{
-      const pts=[{x:0,y:0}];
+      const pts=[];
+      let lastY=-1;
       for(let i=0;i<qs.length;i++){
-        const x=level(c,qs[i]);
-        if(x>pts[pts.length-1].x+0.01)pts.push({x,y:tg[i]});
+        const y=level(c,qs[i]);
+        // keep it monotonic and skip points too close together to matter
+        if(y>=lastY){pts.push({x:src[i],y});lastY=y;}
       }
-      pts.push({x:1,y:1});
-      return pts;
+      // anchor the ends so the curve spans the full range
+      if(pts.length===0||pts[0].x>0.001)pts.unshift({x:0,y:Math.min(pts.length?pts[0].y:0,level(c,0.001))});
+      if(pts[pts.length-1].x<0.999)pts.push({x:1,y:Math.max(pts[pts.length-1].y,level(c,0.999))});
+      // drop duplicate x values (the curve builder needs strictly increasing x)
+      const out=[pts[0]];
+      for(let i=1;i<pts.length;i++)if(pts[i].x>out[out.length-1].x+0.005)out.push(pts[i]);
+      return out.length>=2?out:[{x:0,y:0},{x:1,y:1}];
     };
     applyGradeData({app:"LUTsmith",state:{},curves:{},name:$("lutname").value});
     curves.r=mkCurve(cdf[0]);curves.g=mkCurve(cdf[1]);curves.b=mkCurve(cdf[2]);
+    /* Saturation: the per-channel curves reproduce the reference's tone and
+       colour cast, but not how saturated it is, so set that separately from
+       the reference's mean chroma. Deliberately NOT setting split toning:
+       the curves already carry the shadow/highlight tint at every luminance,
+       so adding it again would apply the cast twice. */
     setS("sat",((sc/n/255)/0.15-1)*50);
-    const tone=(R,G,B,Nn,colId,amtId)=>{
-      if(!Nn)return;
-      const mr=R/Nn/255,mg=G/Nn/255,mb=B/Nn/255,ml=0.2126*mr+0.7152*mg+0.0722*mb;
-      const dr=mr-ml,dg=mg-ml,db=mb-ml,mag=Math.sqrt(dr*dr+dg*dg+db*db);
-      if(mag>0.008){
-        $(colId).value=exHex(0.5+dr/mag*0.25,0.5+dg/mag*0.25,0.5+db/mag*0.25);
-        state[colId==="shCol"?"shCol":"hiCol"]=hex2rgb($(colId).value);
-        setS(amtId,Math.min(60,mag*500));
-      }
-    };
-    tone(shR,shG,shB,shN,"shCol","shAmt");
-    tone(hiR,hiG,hiB,hiN,"hiCol","hiAmt");
     rebuildCurves();render();pushHistory();
-    fail("Look estimated \u2014 review Curves, Colour and Split toning, then refine. Estimation from one photo is approximate.");
+    fail("Look estimated \u2014 the curves now reproduce the reference's tone and colour. Review and refine; estimation from one photo is approximate.");
   });
 });
 
