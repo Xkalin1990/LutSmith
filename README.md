@@ -6,7 +6,7 @@ Free for personal and non-commercial use ([CC BY-NC 4.0](LICENSE)) — see the L
 
 **[Use LUTsmith now — no download needed](https://xkalin1990.github.io/LutSmith/index.html)**
 
-Grade an image with familiar controls, watch the result live, then export the grade as a standard LUT file. Free and entirely offline: it's a single HTML file with no build step, no server, no account, and no network calls.
+Grade an image with familiar controls, watch the result live, then export the grade as a standard LUT file. You can also bring in an existing Lightroom preset and convert its colour settings to a LUT. Free and entirely offline: it's a single HTML file with no build step, no server, no account, and no network calls.
 
 ## Quick start
 
@@ -43,6 +43,7 @@ Because everything runs locally in the browser, your photos are never uploaded a
 
 - **Starting looks** — 12 film-inspired presets (Portra 400, Ektar 100, Gold 200, Kodachrome 64, Velvia 50, Provia 100F, Pro 400H, Superia 400, CineStill 800T, Tri-X 400, HP5 Plus, and Neutral) as editable starting points
 - **Extract look from photo** — analyses a reference image with per-channel histogram matching and sets up an approximate grade for you to refine
+- **Import Lightroom presets** — convert the colour settings of a `.xmp` or `.lrtemplate` preset into the controls, then export it as a LUT. Approximate by nature: tone, white balance, curves, HSL and split toning carry over, but a LUT cannot store local or spatial edits, so Clarity, Texture, Dehaze, sharpening, noise reduction, vignette, grain and masked adjustments are skipped. The app lists exactly what it left out after each import.
 - **My looks** — save grades to a personal library, or import `.cube` files into it; stored locally in your browser
 - **Base LUT** — import an existing `.cube` and grade on top of it
 - **Log footage** — V-Log source conversion for log-encoded material
@@ -70,6 +71,14 @@ Because everything runs locally in the browser, your photos are never uploaded a
 ## Browser support
 
 Any current version of Chrome, Edge, Firefox or Safari. The library uses IndexedDB, so private/incognito windows may limit how much you can store.
+
+## Supporting LUTsmith
+
+LUTsmith is free and always will be. It's built and maintained in my own time, so if it saves you money on a LUT pack or earns you a nicer looking grade, you're very welcome to put something in the tip jar. Entirely optional, and nothing in the app is locked behind it.
+
+**[Buy me a coffee on Ko-fi](https://ko-fi.com/mariom1990)**
+
+Sharing the link, reporting a bug, or suggesting an improvement helps just as much.
 
 ## Contributing
 

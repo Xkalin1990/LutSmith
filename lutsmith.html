@@ -184,6 +184,10 @@
   .cubemini div::after{content:attr(data-in);position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font:9px var(--mono);color:#000;text-shadow:0 0 2px #fff,0 0 2px #fff;letter-spacing:.04em}
   @media (prefers-reduced-motion: reduce){*{transition:none!important}}
   @media (max-width:760px){main{flex-direction:column}aside{width:100%;border-left:none;border-top:1px solid var(--line)}#stage{min-height:42vh}}
+  #supportLink{margin-left:10px;padding:5px 12px;border:1px solid var(--line);border-radius:3px;
+    color:var(--dim);font:11px var(--mono);text-transform:uppercase;letter-spacing:.07em;
+    text-decoration:none;transition:color .12s,border-color .12s}
+  #supportLink:hover{color:var(--orange);border-color:var(--orange)}
 </style>
 </head>
 <body>
@@ -197,6 +201,8 @@
   <button id="saveProj">Save project</button>
   <button id="loadProj">Load project</button>
   <input type="file" id="projfile" accept=".json,application/json" hidden>
+  <a id="supportLink" href="https://ko-fi.com/mariom1990" target="_blank" rel="noopener"
+     title="LUTsmith is free. If it's useful, you can buy me a coffee.">♥ Support</a>
 </header>
 <main>
   <div id="stage">
@@ -291,6 +297,15 @@
         <input type="file" id="exSingleF" accept="image/*" hidden>
       </div>
       <p class="tiny">Single-photo mode analyses tone, white balance, saturation and split toning, then sets the controls to approximate that look — a starting point to refine.</p>
+    </section>
+
+    <section class="closed">
+      <h2>Import Lightroom preset</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="lrImport">Choose .xmp or .lrtemplate…</button>
+        <input type="file" id="lrFile" accept=".xmp,.lrtemplate,text/xml" hidden>
+      </div>
+      <p class="tiny" id="lrReport">Converts the colour parts of a Lightroom preset into these controls, so you can export it as a LUT. Approximate: Lightroom works on raw data, a LUT works on rendered pixels.</p>
     </section>
 
     <section>
@@ -1420,6 +1435,191 @@ $("exSingleF").addEventListener("change",e=>{
     rebuildCurves();render();pushHistory();
     fail("Look estimated \u2014 review Curves, Colour and Split toning, then refine. Estimation from one photo is approximate.");
   });
+});
+
+
+/* ================= Lightroom preset import =================
+   Reads .xmp (Camera Raw / Lightroom Classic) and .lrtemplate (legacy Lua)
+   presets and maps their COLOUR settings onto our controls, so the result can
+   be exported as a .cube.
+
+   Honest limits, reported to the user after each import:
+   a LUT is a fixed per-pixel colour mapping, so anything spatial or local
+   simply cannot be represented — Clarity, Texture, Dehaze, sharpening, noise
+   reduction, vignette, grain, lens corrections and all masked/local edits are
+   ignored. Lightroom also applies its maths to linear raw data inside its own
+   pipeline, whereas this LUT applies to already-rendered RGB, so even the
+   mapped settings are close approximations rather than exact matches. */
+
+function lrParse(text){
+  const v={};
+  // --- .lrtemplate (Lua table): key = value, and s = { ... } blocks ---
+  if(/^\s*s\s*=\s*\{/m.test(text)||/lrtemplate/i.test(text)){
+    const re=/(\w+)\s*=\s*(-?[\d.]+|"[^"]*"|true|false)/g;let m;
+    while((m=re.exec(text))){
+      let val=m[2];
+      if(val==="true")val=1;else if(val==="false")val=0;
+      else if(val[0]==='"')val=val.slice(1,-1);
+      else val=parseFloat(val);
+      if(v[m[1]]===undefined)v[m[1]]=val;
+    }
+  }
+  // --- .xmp: crs: attributes, either as attributes or child elements ---
+  const attr=/crs:(\w+)\s*=\s*"([^"]*)"/g;let a;
+  while((a=attr.exec(text))){
+    const num=parseFloat(a[2]);
+    v[a[1]]=Number.isNaN(num)?a[2]:num;
+  }
+  const el=/<crs:(\w+)>([^<]*)<\/crs:\1>/g;let e;
+  while((e=el.exec(text))){
+    const num=parseFloat(e[2]);
+    if(v[e[1]]===undefined)v[e[1]]=Number.isNaN(num)?e[2]:num;
+  }
+  // --- tone curves: <crs:ToneCurvePV2012> <rdf:Seq> <rdf:li>x, y</rdf:li> ---
+  const curveNames=["ToneCurvePV2012","ToneCurvePV2012Red","ToneCurvePV2012Green","ToneCurvePV2012Blue","ToneCurve"];
+  for(const nm of curveNames){
+    const blk=new RegExp("<crs:"+nm+"[\\s\\S]*?<\\/crs:"+nm+">","i").exec(text);
+    if(blk){
+      const pts=[...blk[0].matchAll(/<rdf:li>\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*<\/rdf:li>/g)]
+        .map(p=>({x:parseFloat(p[1])/255,y:parseFloat(p[2])/255}));
+      if(pts.length>=2)v["_curve_"+nm]=pts;
+    }
+    // lrtemplate stores curves as flat lists: toneCurvePV2012 = { 0, 0, 255, 255 }
+    const lua=new RegExp(nm+"\\s*=\\s*\\{([^}]*)\\}","i").exec(text);
+    if(lua&&!v["_curve_"+nm]){
+      const nums=lua[1].split(/[,\s]+/).map(parseFloat).filter(n=>!Number.isNaN(n));
+      const pts=[];
+      for(let i=0;i+1<nums.length;i+=2)pts.push({x:nums[i]/255,y:nums[i+1]/255});
+      if(pts.length>=2)v["_curve_"+nm]=pts;
+    }
+  }
+  return v;
+}
+
+/* Lightroom's 8 HSL bands sit at uneven hues; our 8 handles are evenly spaced
+   at 45 degrees. Resample the bands onto our handle positions by interpolating
+   between the two nearest Lightroom bands (wrapping around the hue circle). */
+const LR_BANDS=[
+  ["Red",0],["Orange",30],["Yellow",60],["Green",120],
+  ["Aqua",180],["Blue",240],["Purple",270],["Magenta",300]];
+function lrResampleHSL(v,prefix,scale){
+  const src=LR_BANDS.map(([name,hue])=>({hue,val:(typeof v[prefix+name]==="number"?v[prefix+name]:0)}));
+  if(src.every(p=>p.val===0))return null;
+  const out=new Array(HUEN).fill(0);
+  for(let i=0;i<HUEN;i++){
+    const h=i*(360/HUEN);
+    // nearest band below and above, wrapping
+    let lo=src[src.length-1],hi=src[0];
+    for(let k=0;k<src.length;k++){
+      if(src[k].hue<=h)lo=src[k];
+      if(src[k].hue>h){hi=src[k];break;}
+    }
+    let span=(hi.hue-lo.hue+360)%360;if(span===0)span=360;
+    let t=((h-lo.hue+360)%360)/span;
+    out[i]=(lo.val*(1-t)+hi.val*t)*scale;
+  }
+  return out;
+}
+
+function lrApply(v){
+  const skipped=[];
+  const note=(cond,label)=>{if(cond)skipped.push(label);};
+
+  // start from a clean slate so leftovers don't blend in
+  applyGradeData({app:"LUTsmith",state:{},curves:{},name:$("lutname").value});
+
+  // ---- tone (Lightroom ranges match ours at -100..100; exposure is in stops) ----
+  if(typeof v.Exposure2012==="number")setS("exposure",v.Exposure2012*100);
+  else if(typeof v.Exposure==="number")setS("exposure",v.Exposure*100);
+  const map={Contrast2012:"contrast",Highlights2012:"highlights",Shadows2012:"shadows",
+             Blacks2012:"blacks",Temperature:null,Tint:"tint",Vibrance:"vib",Saturation:"sat"};
+  for(const[k,id]of Object.entries(map))
+    if(id&&typeof v[k]==="number")setS(id,v[k]);
+  // Whites has no direct control; fold it gently into highlights
+  if(typeof v.Whites2012==="number"&&v.Whites2012)
+    setS("highlights",(state.highlights||0)+v.Whites2012*0.5);
+
+  // ---- white balance ----
+  // "As Shot"/absolute Kelvin can't be honoured (we have no raw white point),
+  // but a preset's relative shift is usable when it's a small signed number.
+  if(typeof v.Temperature==="number"){
+    if(Math.abs(v.Temperature)<=150)setS("temp",v.Temperature);
+    else note(true,"absolute Kelvin white balance");
+  }
+
+  // ---- tone curves (0..255 point lists -> our 0..1) ----
+  const cmap={ToneCurvePV2012:"m",ToneCurvePV2012Red:"r",ToneCurvePV2012Green:"g",ToneCurvePV2012Blue:"b"};
+  let gotCurve=false;
+  for(const[nm,ch]of Object.entries(cmap)){
+    const pts=v["_curve_"+nm];
+    if(pts&&pts.length>=2){curves[ch]=pts.map(p=>({x:clamp(p.x),y:clamp(p.y)}));gotCurve=true;}
+  }
+  if(!gotCurve&&v._curve_ToneCurve)curves.m=v._curve_ToneCurve.map(p=>({x:clamp(p.x),y:clamp(p.y)}));
+
+  // ---- HSL -> our hue strips ----
+  const hh=lrResampleHSL(v,"HueAdjustment",1/100);        // ±100 -> ±1 (=±60 deg)
+  const hs=lrResampleHSL(v,"SaturationAdjustment",1/100);
+  const hl=lrResampleHSL(v,"LuminanceAdjustment",1/100);
+  if(hh)hh.forEach((x,i)=>hueShift[i]=Math.max(-1,Math.min(1,x)));
+  if(hs)hs.forEach((x,i)=>hueSat[i]=Math.max(-1,Math.min(1,x)));
+  note(!!hl,"HSL luminance (no equivalent control)");
+
+  // ---- split toning / colour grading ----
+  const st=(hueK,satK,colId,amtId)=>{
+    const hue=v[hueK],sat=v[satK];
+    if(typeof hue==="number"&&typeof sat==="number"&&sat>0){
+      const[r,g,b]=hsl2rgb(((hue%360)+360)%360,Math.min(1,sat/100),0.5);
+      const hex="#"+[r,g,b].map(x=>Math.round(clamp(x)*255).toString(16).padStart(2,"0")).join("");
+      $(colId).value=hex;state[colId]=hex2rgb(hex);
+      setS(amtId,Math.min(100,sat));
+    }
+  };
+  st("SplitToningShadowHue","SplitToningShadowSaturation","shCol","shAmt");
+  st("SplitToningHighlightHue","SplitToningHighlightSaturation","hiCol","hiAmt");
+  st("ColorGradeShadowHue","ColorGradeShadowSat","shCol","shAmt");
+  st("ColorGradeHighlightHue","ColorGradeHighlightSat","hiCol","hiAmt");
+  // midtone wheel -> our colour-balance midtones
+  if(typeof v.ColorGradeMidtoneHue==="number"&&v.ColorGradeMidtoneSat>0){
+    const ang=(v.ColorGradeMidtoneHue%360)*Math.PI/180,r=Math.min(1,v.ColorGradeMidtoneSat/100);
+    cbState.midtones.x=Math.cos(ang)*r;cbState.midtones.y=Math.sin(ang)*r;
+  }
+
+  // ---- things a LUT physically cannot carry ----
+  note(v.Clarity2012||v.Clarity,"Clarity");
+  note(v.Texture,"Texture");
+  note(v.Dehaze,"Dehaze");
+  note(v.Sharpness,"sharpening");
+  note(v.LuminanceSmoothing||v.ColorNoiseReduction,"noise reduction");
+  note(v.PostCropVignetteAmount||v.VignetteAmount,"vignette");
+  note(v.GrainAmount,"grain");
+  note(v.LensProfileEnable,"lens corrections");
+  note(/MaskGroupBasedCorrections|CircularGradientBasedCorrections|PaintBasedCorrections/.test(v._raw||""),"local/masked adjustments");
+
+  rebuildCurves();render();pushHistory();
+  return skipped;
+}
+
+$("lrImport").addEventListener("click",()=>$("lrFile").click());
+$("lrFile").addEventListener("change",e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  const rd=new FileReader();
+  rd.onerror=()=>fail("Couldn't read "+f.name);
+  rd.onload=()=>{
+    try{
+      const text=rd.result;
+      const v=lrParse(text);
+      v._raw=text;
+      if(!Object.keys(v).length){fail("That file doesn't look like a Lightroom preset.");return;}
+      const skipped=lrApply(v);
+      const nm=(f.name||"preset").replace(/\.(xmp|lrtemplate)$/i,"");
+      $("lutname").value=nm.slice(0,40);
+      $("lrReport").innerHTML="Imported <b>"+nm.replace(/[<>&]/g,"")+"</b>. "+
+        (skipped.length?"Not converted (a LUT can't store these): "+skipped.join(", ")+".":"All colour settings converted.")+
+        " Review the controls and refine before exporting.";
+      fail("Lightroom preset imported \u2014 approximate conversion, review before exporting.");
+    }catch(err){fail("Couldn't convert that preset: "+err.message);}
+  };
+  rd.readAsText(f);
 });
 
 /* ================= shared grade serialise / apply ================= */
