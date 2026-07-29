@@ -415,13 +415,38 @@
       <div class="exprow">
         <select id="lutsize">
           <option value="17">17-point</option>
-          <option value="33" selected>33-point</option>
-          <option value="65">65-point</option>
+          <option value="33" selected>33-point (cameras)</option>
+          <option value="65">65-point (editing only)</option>
         </select>
         <button id="export" disabled>Export LUT (.cube)</button>
       </div>
+      <div class="row" style="margin-top:8px">
+        <label for="lumixStyle" title="Lumix bodies read this from the file to pick the base Photo Style. Without it they assume V-Log.">Base Photo Style</label>
+        <select id="lumixStyle">
+          <option value="">None (camera assumes V-Log)</option>
+          <option value="VLOG" selected>V-Log</option>
+          <option value="STD">Standard</option>
+          <option value="VIVD">Vivid</option>
+          <option value="NAT">Natural</option>
+          <option value="LCLASN">L.ClassicNeo</option>
+          <option value="FLAT">Flat</option>
+          <option value="LAND">Landscape</option>
+          <option value="PORT">Portrait</option>
+          <option value="MONO">Monochrome</option>
+          <option value="LMONO">L.Monochrome</option>
+          <option value="LMONOD">L.Monochrome D</option>
+          <option value="LMONOS">L.Monochrome S</option>
+          <option value="LEICAMONO">LEICA Monochrome</option>
+          <option value="CNED2">Cinelike D2</option>
+          <option value="CNEV2">Cinelike V2</option>
+          <option value="709L">Like709</option>
+          <option value="HLG">HLG</option>
+          <option value="LOGC3">ARRI LogC3</option>
+        </select>
+      </div>
       <button id="exportPack">Export look pack — every saved look as .cube</button>
       <p class="hint">Standard .cube format · loads as an in-camera real-time LUT and in Resolve, Premiere, FCP, Photoshop</p>
+      <p class="hint" id="lumixHint"></p>
     </footer>
   </aside>
 </main>
@@ -2211,7 +2236,15 @@ $("savephoto").addEventListener("click",()=>{
 $("export").addEventListener("click",()=>{
   const N=+$("lutsize").value;
   const safeTitle=($("lutname").value||"my_grade").replace(/["\r\n]/g,"");
-  const head=`# Created with LUTsmith\nTITLE "${safeTitle}"\nLUT_3D_SIZE ${N}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n`;
+  /* Lumix "base Photo Style": per Panasonic's LUT Library documentation, a
+     .cube may carry a Photo Style tag placed directly under the TITLE line,
+     as the identifier tag #LUMIXPHOTOSTYLE, one half-width space, then the
+     style code. Real Time LUT reads it to decide which Photo Style the LUT
+     was built on; if it is missing or malformed the camera assumes V-Log.
+     Harmless to every other application, which ignores # comment lines. */
+  const psTag=$("lumixStyle").value;
+  const psLine=psTag?`#LUMIXPHOTOSTYLE ${psTag}\n`:"";
+  const head=`# Created with LUTsmith\nTITLE "${safeTitle}"\n${psLine}LUT_3D_SIZE ${N}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n`;
   const lines=[];
   for(let b=0;b<N;b++)for(let g=0;g<N;g++)for(let r=0;r<N;r++){
     const o=grade(r/(N-1),g/(N-1),b/(N-1));
@@ -2221,7 +2254,24 @@ $("export").addEventListener("click",()=>{
   download(name,head+lines.join("\n")+"\n","text/plain");
 });
 
+/* Live Lumix compatibility check. Panasonic's LUT Library documentation states
+   .cube files are supported from 2-point up to 33-point (so 65 will simply be
+   refused by the camera), and that on a FAT32 card (SD/SDHC) the file name is
+   limited to 8 characters excluding the extension. Both failures are silent on
+   the camera: the file just doesn't appear, which is maddening to diagnose. */
+function updateLumixHint(){
+  const el=$("lumixHint");if(!el)return;
+  const base=($("lutname").value||"my_grade").replace(/[^\w-]+/g,"_");
+  const size=+$("lutsize").value;
+  const msgs=[];
+  if(size>33)msgs.push("<b>65-point won't load on Lumix cameras</b> \u2014 they accept up to 33-point. Use 33 for in-camera Real Time LUT.");
+  if(base.length>8)msgs.push("Name is "+base.length+" characters; Lumix cards formatted FAT32 (SD/SDHC) allow <b>8</b>. Shorten it, or use an SDXC/CFexpress card.");
+  if(msgs.length){el.innerHTML="\u26A0 "+msgs.join(" ");el.style.display="block";el.style.color="var(--red)";}
+  else{el.innerHTML="Ready for Lumix Real Time LUT \u2014 33-point, "+base.length+"-character name.";el.style.display=size===33&&base.length<=8?"block":"none";el.style.color="var(--dim)";}
+}
+
 function updateRebate(){
+  updateLumixHint();
   $("rebatename").textContent=($("lutname").value||"my_grade").toUpperCase().replace(/[^\w-]+/g,"_")+" \u25B8 "+$("lutsize").value;
 }
 $("lutname").addEventListener("input",updateRebate);

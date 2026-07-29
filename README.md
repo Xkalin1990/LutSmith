@@ -65,6 +65,7 @@ Because everything runs locally in the browser, your photos are never uploaded a
 ### Export
 
 - `.cube` 3D LUT at 17, 33 or 65 points
+- **Lumix Real Time LUT support** — optionally embeds the base Photo Style tag that Panasonic bodies read from the file (V-Log, Standard, Cinelike D2, Like709, HLG, ARRI LogC3 and the rest); without it the camera assumes V-Log. It also warns you before export if the point count or file name would make the camera silently reject the LUT
 - Graded photo as a JPEG
 - Standard format, so it works with in-camera LUT slots and every major NLE and grading application
 
