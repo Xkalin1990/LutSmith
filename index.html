@@ -1422,54 +1422,96 @@ $("exSingleF").addEventListener("change",e=>{
   const f=e.target.files[0];e.target.value="";if(!f)return;
   exDecode(f,d=>{
     const n=d.data.length/4;
-    // per-channel histograms + chroma, plus shadow/highlight means for tinting
-    const h=[new Float64Array(256),new Float64Array(256),new Float64Array(256)];
-    let sc=0,shR=0,shG=0,shB=0,shN=0,hiR=0,hiG=0,hiB=0,hiN=0;
+
+    /* LOOK EXTRACTION by colour deviation conditioned on luminance.
+
+       Earlier versions matched each channel's histogram (against either an
+       imagined "average" photo or the loaded one). That transfers the
+       reference's SCENE COMPOSITION, not its grading: a warm, ground-heavy
+       reference mapped onto a bright, sky-heavy target sends the blue channel
+       through a violent warm-to-blue swing in the upper mids, which is what
+       produced the blue/magenta washed results.
+
+       Instead we measure, at each luminance level, how far each channel sits
+       from neutral grey. That deviation is a property of the GRADE rather
+       than of what happens to be in the frame, it is inherently small in
+       magnitude (so nothing washes out), and it cannot flip sign the way
+       crossing histograms can. The resulting curves are identity plus that
+       measured offset, which is exactly a shadow/midtone/highlight tint. */
+
+    const NB=14;
+    const cnt=new Float64Array(NB),sL=new Float64Array(NB),
+          sR=new Float64Array(NB),sG=new Float64Array(NB),sB=new Float64Array(NB);
+    let chroma=0;
+    const lumHist=new Float64Array(256);
     for(let p=0;p<d.data.length;p+=4){
-      const r=d.data[p],g=d.data[p+1],b=d.data[p+2];
-      h[0][r]++;h[1][g]++;h[2][b]++;
-      sc+=Math.max(r,g,b)-Math.min(r,g,b);
+      const r=d.data[p]/255,g=d.data[p+1]/255,b=d.data[p+2]/255;
       const l=0.2126*r+0.7152*g+0.0722*b;
-      if(l<64){shR+=r;shG+=g;shB+=b;shN++;}else if(l>192){hiR+=r;hiG+=g;hiB+=b;hiN++;}
+      lumHist[Math.min(255,Math.round(l*255))]++;
+      chroma+=Math.max(r,g,b)-Math.min(r,g,b);
+      const i=Math.min(NB-1,Math.floor(l*NB));
+      cnt[i]++;sL[i]+=l;sR[i]+=r;sG[i]+=g;sB[i]+=b;
     }
-    // cumulative distribution per channel
-    const cdf=h.map(ch=>{const c=new Float64Array(256);let a=0;for(let i=0;i<256;i++){a+=ch[i];c[i]=a/n;}return c;});
-    const level=(c,q)=>{for(let i=0;i<256;i++)if(c[i]>=q)return i/255;return 1;};
-    /* HISTOGRAM MATCHING, reference direction.
-       We want a grade that RECREATES the reference look on the user's own
-       photo, so each curve must map a typical/neutral input distribution ONTO
-       the reference's distribution: x = where a normal photo sits at a given
-       percentile, y = where the reference sits at that same percentile.
-       (Mapping it the other way round would strip the look out of the
-       reference instead of reproducing it.) */
-    const qs=[0.02,0.10,0.25,0.50,0.75,0.90,0.98];
-    const src=[0.02,0.10,0.25,0.50,0.75,0.90,0.98];   // assumed neutral input
-    const mkCurve=c=>{
-      const pts=[];
-      let lastY=-1;
-      for(let i=0;i<qs.length;i++){
-        const y=level(c,qs[i]);
-        // keep it monotonic and skip points too close together to matter
-        if(y>=lastY){pts.push({x:src[i],y});lastY=y;}
+
+    /* Fit a SMOOTH model to the measured offsets rather than trusting each bin.
+       offset(L) = a + b*(L-0.5): "a" is the overall cast, "b" is the tilt from
+       shadows to highlights, i.e. split toning. Two parameters per channel is
+       far more stable than fourteen independent bins, and it separates the
+       grade from content bleed: in a frame with warm ground and a neutral
+       bright sky, the raw bins swing from warm to cool around the sky's
+       luminance, which is the scene, not the look. A straight line through
+       them keeps the coherent cast and discards the swing.
+       Each bin's weight is capped so one large area (a big sky) can't dominate. */
+    const minCount=Math.max(20,n*0.004);
+    const wCap=n*0.12;
+    const fit=sCh=>{
+      let sw=0,swx=0,swy=0,swxx=0,swxy=0;
+      for(let i=0;i<NB;i++){
+        if(cnt[i]<minCount)continue;
+        const lm=sL[i]/cnt[i], off=sCh[i]/cnt[i]-lm;
+        const w=Math.min(cnt[i],wCap), x=lm-0.5;
+        sw+=w;swx+=w*x;swy+=w*off;swxx+=w*x*x;swxy+=w*x*off;
       }
-      // anchor the ends so the curve spans the full range
-      if(pts.length===0||pts[0].x>0.001)pts.unshift({x:0,y:Math.min(pts.length?pts[0].y:0,level(c,0.001))});
-      if(pts[pts.length-1].x<0.999)pts.push({x:1,y:Math.max(pts[pts.length-1].y,level(c,0.999))});
-      // drop duplicate x values (the curve builder needs strictly increasing x)
-      const out=[pts[0]];
-      for(let i=1;i<pts.length;i++)if(pts[i].x>out[out.length-1].x+0.005)out.push(pts[i]);
-      return out.length>=2?out:[{x:0,y:0},{x:1,y:1}];
+      if(sw<=0)return{a:0,b:0};
+      const den=sw*swxx-swx*swx;
+      let b=Math.abs(den)>1e-9?(sw*swxy-swx*swy)/den:0;
+      let a=(swy-b*swx)/sw;
+      // keep the look plausible: cap the overall cast and the tilt
+      a=Math.max(-0.10,Math.min(0.10,a));
+      b=Math.max(-0.20,Math.min(0.20,b));
+      return{a,b};
     };
+    const build=sCh=>{
+      const{a,b}=fit(sCh);
+      const pts=[];
+      for(const x of [0,0.25,0.5,0.75,1]){
+        const off=a+b*(x-0.5);
+        pts.push({x,y:Math.max(0,Math.min(1,x+off))});
+      }
+      // keep it monotonic so the curve can't band or invert
+      for(let i=1;i<pts.length;i++)if(pts[i].y<pts[i-1].y)pts[i].y=pts[i-1].y;
+      return pts;
+    };
+
     applyGradeData({app:"LUTsmith",state:{},curves:{},name:$("lutname").value});
-    curves.r=mkCurve(cdf[0]);curves.g=mkCurve(cdf[1]);curves.b=mkCurve(cdf[2]);
-    /* Saturation: the per-channel curves reproduce the reference's tone and
-       colour cast, but not how saturated it is, so set that separately from
-       the reference's mean chroma. Deliberately NOT setting split toning:
-       the curves already carry the shadow/highlight tint at every luminance,
-       so adding it again would apply the cast twice. */
-    setS("sat",((sc/n/255)/0.15-1)*50);
+    curves.r=build(sR);curves.g=build(sG);curves.b=build(sB);
+
+    /* Tone: only the black lift is safely inferable from a single photo. A
+       reference whose darkest pixels sit well above black is a faded/matte
+       look; anything more ambitious (contrast, overall brightness) depends on
+       the scene rather than the grade, so we leave it alone. */
+    let acc=0,bp=0;
+    for(let i=0;i<256;i++){acc+=lumHist[i];if(acc>=n*0.005){bp=i/255;break;}}
+    if(bp>0.05)curves.m=[{x:0,y:Math.min(0.18,bp*0.6)},{x:1,y:1}];
+
+    /* Saturation: only act on clear desaturation, which is usually a grading
+       choice. High chroma is more often just a colourful subject, so we don't
+       crank saturation up on that evidence. */
+    const meanChroma=chroma/n;
+    if(meanChroma<0.12)setS("sat",Math.max(-45,(meanChroma/0.12-1)*60));
+
     rebuildCurves();render();pushHistory();
-    fail("Look estimated \u2014 the curves now reproduce the reference's tone and colour. Review and refine; estimation from one photo is approximate.");
+    fail("Look extracted \u2014 the reference's colour cast and black level are now on the curves. Review and refine; a single photo can only suggest a look.");
   });
 });
 
