@@ -1212,15 +1212,32 @@ function setPick(mode){
 }
 $("wbPick").addEventListener("click",()=>setPick("wb"));
 $("secPick").addEventListener("click",()=>setPick("sec"));
-function samplePixel(e){
+/* Average a small patch rather than one pixel: a single pixel is dominated by
+   sensor noise and JPEG blocking, which throws the white balance off. Standard
+   eyedroppers behave the same way. Also reports whether the sample is usable:
+   clipped or near-black patches carry no reliable colour information. */
+function samplePixel(e,radius){
   const rect=view.getBoundingClientRect(),src=images[cur].data;
-  const x=Math.max(0,Math.min(src.width-1,Math.round((e.clientX-rect.left)/rect.width*src.width)));
-  const y=Math.max(0,Math.min(src.height-1,Math.round((e.clientY-rect.top)/rect.height*src.height)));
-  const i=(y*src.width+x)*4;
-  let r=src.data[i]/255,g=src.data[i+1]/255,b=src.data[i+2]/255;
+  const R=(radius===undefined)?2:radius;   // 2 -> 5x5 patch
+  const cx=Math.max(0,Math.min(src.width-1,Math.round((e.clientX-rect.left)/rect.width*src.width)));
+  const cy=Math.max(0,Math.min(src.height-1,Math.round((e.clientY-rect.top)/rect.height*src.height)));
+  let sr=0,sg=0,sb=0,n=0,clipped=0;
+  for(let y=cy-R;y<=cy+R;y++){
+    if(y<0||y>=src.height)continue;
+    for(let x=cx-R;x<=cx+R;x++){
+      if(x<0||x>=src.width)continue;
+      const i=(y*src.width+x)*4;
+      const r8=src.data[i],g8=src.data[i+1],b8=src.data[i+2];
+      if(r8>=254||g8>=254||b8>=254||(r8<=2&&g8<=2&&b8<=2))clipped++;
+      sr+=r8;sg+=g8;sb+=b8;n++;
+    }
+  }
+  if(!n)return[0,0,0,{n:0,clipped:0,lum:0}];
+  let r=sr/n/255,g=sg/n/255,b=sb/n/255;
+  const info={n,clipped:clipped/n,lum:0.2126*r+0.7152*g+0.0722*b};
   if(state.logMode){r=vlog2rec709(r);g=vlog2rec709(g);b=vlog2rec709(b);}
   if(baseLUT&&baseOn)[r,g,b]=sampleBase(r,g,b);
-  return[r,g,b];
+  return[r,g,b,info];
 }
 function setSliderUI(id,v){
   v=Math.max(+$(id).min,Math.min(+$(id).max,Math.round(v)));
@@ -1229,13 +1246,27 @@ function setSliderUI(id,v){
 }
 function handlePick(e){
   if(!pickMode||cur<0)return false;
-  const[r,g,b]=samplePixel(e);
+  const[r,g,b,info]=samplePixel(e);
   if(pickMode==="wb"){
+    // A clipped or near-black patch has no usable colour: correcting from it
+    // produces a confidently wrong result, so refuse rather than mislead.
+    if(info&&info.clipped>0.5){
+      fail("That area is clipped (pure white or black) \u2014 it carries no colour information. Pick a mid-tone neutral, like a grey card, road or white wall with detail.");
+      return true;
+    }
+    if(info&&info.lum<0.06){
+      fail("That area is nearly black \u2014 too noisy for a reliable white balance. Pick a brighter neutral.");
+      return true;
+    }
     const t=(b-r)/2;
     const r2=r+t,b2=b-t;
     const ti=((r2+b2)/2-g)/1.5;
-    setSliderUI("temp",t*300);
-    setSliderUI("tint",ti*300);
+    const tempV=t*300,tintV=ti*300;
+    setSliderUI("temp",tempV);
+    setSliderUI("tint",tintV);
+    // The sliders stop at +-100; a very strong cast can't be fully removed.
+    if(Math.abs(tempV)>100||Math.abs(tintV)>100)
+      fail("Strong colour cast \u2014 corrected as far as the sliders allow. Fine-tune by hand if it still looks off.");
   }else{
     const[h]=rgb2hsl(r,g,b);
     setSliderUI("secHueC",h);
