@@ -1750,6 +1750,9 @@ function lrParse(text){
     const nm=/crs:Name\s*=\s*"([^"]*)"/i.exec(lookBlk[0]);
     if(nm)v._lookName=nm[1].replace(/&amp;/g,"&");
   }
+  // some presets name the profile in crs:CameraProfile instead of a Look block
+  if(!v._lookName&&typeof v.CameraProfile==="string")
+    v._lookName=v.CameraProfile.replace(/&amp;/g,"&");
 
   // --- tone curves: <crs:ToneCurvePV2012> <rdf:Seq> <rdf:li>x, y</rdf:li> ---
   const curveNames=["ToneCurvePV2012","ToneCurvePV2012Red","ToneCurvePV2012Green","ToneCurvePV2012Blue","ToneCurve"];
@@ -1825,7 +1828,7 @@ function lrApply(v){
      pipeline, so sepia and selenium style tints survive correctly. */
   const treat=String(v.Treatment==null?"":v.Treatment).replace(/&amp;/g,"&").toLowerCase();
   const lookName=String(v._lookName||"").toLowerCase();
-  const monoLook=/monochrome|mono\b|b&w|black\s*&?\s*white|greyscale|grayscale/.test(lookName);
+  const monoLook=/monochrome|\bmono\b|\bb&w\b|\bb\/w\b|\bbw\b|black\s*(?:&|and|\+)?\s*white|\bgr[ea]yscale\b/.test(lookName);
   const bw=/black/.test(treat)||monoLook||
            v.ConvertToGrayscale===1||v.ConvertToGrayscale===true||
            String(v.ConvertToGrayscale).toLowerCase()==="true";
