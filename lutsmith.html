@@ -183,7 +183,78 @@
   .cubemini div{flex:1;height:18px;border:1px solid var(--line);border-radius:2px;position:relative}
   .cubemini div::after{content:attr(data-in);position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font:9px var(--mono);color:#000;text-shadow:0 0 2px #fff,0 0 2px #fff;letter-spacing:.04em}
   @media (prefers-reduced-motion: reduce){*{transition:none!important}}
-  @media (max-width:760px){main{flex-direction:column}aside{width:100%;border-left:none;border-top:1px solid var(--line)}#stage{min-height:42vh}}
+  /* ---------- tablet / narrow desktop ---------- */
+  @media (max-width:760px){
+    main{flex-direction:column}
+    aside{width:100%;border-left:none;border-top:1px solid var(--line)}
+    #stage{min-height:42vh}
+  }
+
+  /* ---------- phones (portrait) ----------
+     The control panel was designed for a 348px desktop column. On a phone it
+     becomes full width but everything inside stays desktop-dense, so the rows
+     are cramped and the tap targets are cursor-sized. These rules widen the
+     touch targets, stack anything that was side by side, and give the panel
+     room to breathe, without changing any behaviour. */
+  @media (max-width:560px){
+    /* header: title on one line, controls wrapping underneath */
+    header{flex-wrap:wrap;gap:8px 10px;padding:12px 14px}
+    header h1{font-size:19px;width:100%}
+    header p{display:none}            /* strapline costs a whole line on a phone */
+    header .spacer{display:none}
+    header button,#supportLink{padding:9px 12px;font-size:11px;flex:1 1 auto;text-align:center;margin-left:0}
+
+    #stage{padding:10px;gap:8px;min-height:34vh}
+    canvas#view{max-height:38vh}
+    #filmframe{padding:0 8px}
+    #drop{padding:34px 18px}
+    #stagebar{gap:10px;font-size:12px}
+    #thumbs{padding:6px}
+
+    section{padding:16px 14px}
+    /* stack label above the slider so the slider gets the full width */
+    .row{flex-wrap:wrap;gap:8px;margin-bottom:16px}
+    .row label{flex:1 1 100%;font-size:12px}
+    .row input[type=range]{flex:1 1 auto;height:34px}      /* taller = easier to grab */
+    .row .num{flex:0 0 62px;min-width:62px;padding:8px 6px;font-size:14px}
+    .row input[type=color]{flex:0 0 44px;width:44px;height:34px}
+    /* a bigger thumb is much easier to hit with a fingertip */
+    .row input[type=range]::-webkit-slider-thumb{width:22px;height:22px;margin-top:-9px}
+    .row input[type=range]::-moz-range-thumb{width:22px;height:22px}
+    .row input[type=range]::-webkit-slider-runnable-track{height:5px}
+    .row input[type=range]::-moz-range-track{height:5px}
+
+    /* three colour wheels side by side don't fit: stack them */
+    .cbwheels{flex-direction:column;align-items:center;gap:14px}
+    .cbwheel-wrap{flex:none;width:100%}
+    .cbwheel{width:150px;height:150px}
+
+    /* buttons and chips: fewer per row, bigger targets */
+    .presets,.chtabs{gap:8px}
+    .presets button,.chtabs button,.btn{padding:10px 12px;font-size:12px}
+    .btn{flex:1 1 auto;text-align:center}
+    footer{padding:16px 14px}
+    #export{padding:15px;font-size:14px}
+    select,#lutname{padding:10px;font-size:14px}   /* 14px+ stops iOS zooming on focus */
+
+    /* curve editor and strips need height to be usable by touch */
+    #curves,#huecv,#hscv,#lscv,#ramp{min-height:150px}
+    .hint,.tiny{font-size:11px}
+  }
+
+  @media (max-width:560px){
+    html,body{overflow-x:hidden;max-width:100%}
+    /* keep content clear of the notch and home indicator */
+    header{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
+    footer{padding-bottom:max(16px,env(safe-area-inset-bottom))}
+  }
+
+  /* very small phones */
+  @media (max-width:380px){
+    header h1{font-size:17px}
+    .cbwheel{width:130px;height:130px}
+    .row .num{flex:0 0 56px;min-width:56px}
+  }
   #supportLink{margin-left:10px;padding:5px 12px;border:1px solid var(--line);border-radius:3px;
     color:var(--dim);font:11px var(--mono);text-transform:uppercase;letter-spacing:.07em;
     text-decoration:none;transition:color .12s,border-color .12s}
@@ -200,7 +271,7 @@
   <button id="resetAll" title="Reset every adjustment">⟲ Reset all</button>
   <button id="saveProj">Save project</button>
   <button id="loadProj">Load project</button>
-  <input type="file" id="projfile" accept=".json,application/json" hidden>
+  <input type="file" id="projfile" hidden>
   <a id="supportLink" href="https://ko-fi.com/mariom1990" target="_blank" rel="noopener"
      title="LUTsmith is free. If it's useful, you can buy me a coffee.">♥ Support</a>
 </header>
@@ -247,7 +318,7 @@
       <label class="toggle"><input type="checkbox" id="logMode"> Source is log footage (V-Log style) — bake log → Rec.709 into the LUT</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" id="importLut">Import .cube as base…</button>
-        <input type="file" id="lutfile" accept=".cube" hidden>
+        <input type="file" id="lutfile" hidden>
       </div>
       <div id="baseinfo"><label class="toggle" style="margin:0 0 4px"><input type="checkbox" id="baseEnable" checked> Use base LUT</label>Base LUT: <span id="basename"></span> <button id="baseclear">remove</button></div>
       <p class="tiny">The log conversion is an approximation of the V-Log curve; fine-tune with exposure and curves.</p>
@@ -303,9 +374,9 @@
       <h2>Import Lightroom preset</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" id="lrImport">Choose .xmp or .lrtemplate…</button>
-        <input type="file" id="lrFile" accept=".xmp,.lrtemplate,text/xml" hidden>
+        <input type="file" id="lrFile" hidden>
       </div>
-      <p class="tiny" id="lrReport">Converts the colour parts of a Lightroom preset into these controls, so you can export it as a LUT. Approximate: Lightroom works on raw data, a LUT works on rendered pixels.</p>
+      <p class="tiny" id="lrReport">Pick any .xmp or .lrtemplate file (the picker shows all files, because iPadOS hides unknown types when filtered). Converts the colour parts of a Lightroom preset into these controls, so you can export it as a LUT. Approximate: Lightroom works on raw data, a LUT works on rendered pixels.</p>
     </section>
 
     <section>
@@ -313,7 +384,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" id="saveLook">Save current look</button>
         <button class="btn" id="addLookCube">Add .cube file…</button>
-        <input type="file" id="lookCubeFile" accept=".cube" hidden>
+        <input type="file" id="lookCubeFile" hidden>
       </div>
       <div id="looksDD">
         <button id="looksToggle" type="button"><span id="looksCount">Saved looks (0)</span><span class="caret">▾</span></button>
@@ -1782,6 +1853,9 @@ function lrApply(v){
 $("lrImport").addEventListener("click",()=>$("lrFile").click());
 $("lrFile").addEventListener("change",e=>{
   const f=e.target.files[0];e.target.value="";if(!f)return;
+  // The picker can no longer filter by extension (iPadOS hides unknown types
+  // when it does), so sanity-check the choice here instead.
+  if(f.size>4*1024*1024){fail("That file is too large to be a Lightroom preset \u2014 presets are only a few kilobytes.");return;}
   const rd=new FileReader();
   rd.onerror=()=>fail("Couldn't read "+f.name);
   rd.onload=()=>{
@@ -1789,7 +1863,7 @@ $("lrFile").addEventListener("change",e=>{
       const text=rd.result;
       const v=lrParse(text);
       v._raw=text;
-      if(!Object.keys(v).length){fail("That file doesn't look like a Lightroom preset.");return;}
+      if(!Object.keys(v).length){fail("No Lightroom settings found in \""+f.name+"\". Choose a .xmp or .lrtemplate preset file \u2014 note a .xmp sidecar exported next to a photo carries that photo's settings, which also works.");return;}
       const skipped=lrApply(v);
       const nm=(f.name||"preset").replace(/\.(xmp|lrtemplate)$/i,"");
       $("lutname").value=nm.slice(0,40);
