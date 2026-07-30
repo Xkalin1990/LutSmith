@@ -183,8 +183,22 @@
   .cubemini div{flex:1;height:18px;border:1px solid var(--line);border-radius:2px;position:relative}
   .cubemini div::after{content:attr(data-in);position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font:9px var(--mono);color:#000;text-shadow:0 0 2px #fff,0 0 2px #fff;letter-spacing:.04em}
   @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+  /* ---------- header reflow (covers iPad portrait at 768px too) ----------
+     The header is one flex row: logo, strapline, spacer, buttons. Once the
+     window narrows, the strapline gets squeezed into a tall thin column and
+     the right-hand buttons run off the edge. Giving the strapline a full-width
+     basis pushes it onto its own line directly under the logo, and lets the
+     buttons wrap onto a third line instead of overflowing. */
+  @media (max-width:900px){
+    header{flex-wrap:wrap;gap:6px 8px;padding:12px 14px;align-items:center}
+    header h1{flex:0 0 auto}
+    header p{flex:1 1 100%;margin:0;font-size:12px;line-height:1.4}
+    header .spacer{display:none}
+    header button,#supportLink{flex:0 1 auto;margin-left:0;white-space:nowrap}
+  }
+
   /* ---------- tablet / narrow desktop ---------- */
-  @media (max-width:760px){
+  @media (max-width:820px){
     main{flex-direction:column}
     aside{width:100%;border-left:none;border-top:1px solid var(--line)}
     #stage{min-height:42vh}
@@ -199,10 +213,9 @@
   @media (max-width:560px){
     /* header: title on one line, controls wrapping underneath */
     header{flex-wrap:wrap;gap:8px 10px;padding:12px 14px}
-    header h1{font-size:19px;width:100%}
-    header p{display:none}            /* strapline costs a whole line on a phone */
-    header .spacer{display:none}
-    header button,#supportLink{padding:9px 12px;font-size:11px;flex:1 1 auto;text-align:center;margin-left:0}
+    header h1{font-size:19px}
+    header p{font-size:11px}
+    header button,#supportLink{padding:9px 10px;font-size:11px;flex:1 1 auto;text-align:center;margin-left:0}
 
     #stage{padding:10px;gap:8px;min-height:34vh}
     canvas#view{max-height:38vh}
