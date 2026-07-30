@@ -1739,6 +1739,18 @@ function lrParse(text){
     const num=parseFloat(e[2]);
     if(v[e[1]]===undefined)v[e[1]]=Number.isNaN(num)?e[2]:num;
   }
+  /* --- embedded profile (Look) ---
+     Many presets don't set Treatment or ConvertToGrayscale at all; the black
+     and white conversion is carried by the camera profile instead, e.g.
+     <crs:Look><rdf:Description crs:Name="Adobe Monochrome" ...>. We pull that
+     name out separately because the generic attribute sweep above would
+     otherwise mix it up with the preset's own crs:Name. */
+  const lookBlk=/<crs:Look>[\s\S]*?<\/crs:Look>/i.exec(text);
+  if(lookBlk){
+    const nm=/crs:Name\s*=\s*"([^"]*)"/i.exec(lookBlk[0]);
+    if(nm)v._lookName=nm[1].replace(/&amp;/g,"&");
+  }
+
   // --- tone curves: <crs:ToneCurvePV2012> <rdf:Seq> <rdf:li>x, y</rdf:li> ---
   const curveNames=["ToneCurvePV2012","ToneCurvePV2012Red","ToneCurvePV2012Green","ToneCurvePV2012Blue","ToneCurve"];
   for(const nm of curveNames){
@@ -1787,6 +1799,7 @@ function lrResampleHSL(v,prefix,scale){
 
 function lrApply(v){
   const skipped=[];
+  let bwVia=null;
   const note=(cond,label)=>{if(cond)skipped.push(label);};
 
   // start from a clean slate so leftovers don't blend in
@@ -1802,6 +1815,33 @@ function lrApply(v){
   // Whites has no direct control; fold it gently into highlights
   if(typeof v.Whites2012==="number"&&v.Whites2012)
     setS("highlights",(state.highlights||0)+v.Whites2012*0.5);
+
+  /* ---- black & white ----
+     Lightroom flags a monochrome preset either with Treatment (current) or
+     ConvertToGrayscale (legacy). Note Treatment arrives XML-escaped as
+     "Black &amp; White", so match loosely rather than comparing strings.
+     Without this the preset imported as a colour image, which is the whole
+     point of a B&W preset. Split toning still applies afterwards in our
+     pipeline, so sepia and selenium style tints survive correctly. */
+  const treat=String(v.Treatment==null?"":v.Treatment).replace(/&amp;/g,"&").toLowerCase();
+  const lookName=String(v._lookName||"").toLowerCase();
+  const monoLook=/monochrome|mono\b|b&w|black\s*&?\s*white|greyscale|grayscale/.test(lookName);
+  const bw=/black/.test(treat)||monoLook||
+           v.ConvertToGrayscale===1||v.ConvertToGrayscale===true||
+           String(v.ConvertToGrayscale).toLowerCase()==="true";
+  if(bw){
+    setS("sat",-100);
+    setS("vib",-100);
+    if(monoLook)bwVia=v._lookName;
+    // colour work is meaningless once desaturated; clear it so the controls
+    // reflect what is actually happening
+    for(let i=0;i<HUEN;i++){hueShift[i]=0;hueSat[i]=0;}
+    if(typeof v.GrayMixerRed==="number"||typeof v.GrayMixerBlue==="number"||
+       typeof v.GrayMixerYellow==="number"||typeof v.GrayMixerGreen==="number"||
+       typeof v.GrayMixerOrange==="number"||typeof v.GrayMixerAqua==="number"||
+       typeof v.GrayMixerPurple==="number"||typeof v.GrayMixerMagenta==="number")
+      skipped.push("B&W channel mixer (each colour's contribution to grey)");
+  }
 
   // ---- white balance ----
   // "As Shot"/absolute Kelvin can't be honoured (we have no raw white point),
@@ -1821,9 +1861,9 @@ function lrApply(v){
   if(!gotCurve&&v._curve_ToneCurve)curves.m=v._curve_ToneCurve.map(p=>({x:clamp(p.x),y:clamp(p.y)}));
 
   // ---- HSL -> our hue strips ----
-  const hh=lrResampleHSL(v,"HueAdjustment",1/100);        // ±100 -> ±1 (=±60 deg)
-  const hs=lrResampleHSL(v,"SaturationAdjustment",1/100);
-  const hl=lrResampleHSL(v,"LuminanceAdjustment",1/100);
+  const hh=bw?null:lrResampleHSL(v,"HueAdjustment",1/100);   // ±100 -> ±1 (=±60 deg)
+  const hs=bw?null:lrResampleHSL(v,"SaturationAdjustment",1/100);
+  const hl=bw?null:lrResampleHSL(v,"LuminanceAdjustment",1/100);
   if(hh)hh.forEach((x,i)=>hueShift[i]=Math.max(-1,Math.min(1,x)));
   if(hs)hs.forEach((x,i)=>hueSat[i]=Math.max(-1,Math.min(1,x)));
   note(!!hl,"HSL luminance (no equivalent control)");
@@ -1857,9 +1897,12 @@ function lrApply(v){
   note(v.PostCropVignetteAmount||v.VignetteAmount,"vignette");
   note(v.GrainAmount,"grain");
   note(v.LensProfileEnable,"lens corrections");
+  if(v._lookName&&!monoLook&&!/adobe color|camera standard|^$/i.test(v._lookName))
+    note(true,"the \""+v._lookName+"\" camera profile");
   note(/MaskGroupBasedCorrections|CircularGradientBasedCorrections|PaintBasedCorrections/.test(v._raw||""),"local/masked adjustments");
 
   rebuildCurves();render();pushHistory();
+  if(bwVia)skipped.unshift("__BW__"+bwVia);
   return skipped;
 }
 
@@ -1877,10 +1920,20 @@ $("lrFile").addEventListener("change",e=>{
       const v=lrParse(text);
       v._raw=text;
       if(!Object.keys(v).length){fail("No Lightroom settings found in \""+f.name+"\". Choose a .xmp or .lrtemplate preset file \u2014 note a .xmp sidecar exported next to a photo carries that photo's settings, which also works.");return;}
-      const skipped=lrApply(v);
+      let skipped=lrApply(v);
+      // the B&W notice rides in on the front of the list; split it back out
+      let bwNote="";
+      skipped=skipped.filter(x=>{
+        if(typeof x==="string"&&x.startsWith("__BW__")){
+          bwNote=" Converted to <b>black &amp; white</b> (via the \u201C"+
+            x.slice(6).replace(/[<>&]/g,"")+"\u201D profile).";
+          return false;
+        }
+        return true;
+      });
       const nm=(f.name||"preset").replace(/\.(xmp|lrtemplate)$/i,"");
       $("lutname").value=nm.slice(0,40);
-      $("lrReport").innerHTML="Imported <b>"+nm.replace(/[<>&]/g,"")+"</b>. "+
+      $("lrReport").innerHTML="Imported <b>"+nm.replace(/[<>&]/g,"")+"</b>."+bwNote+" "+
         (skipped.length?"Not converted (a LUT can't store these): "+skipped.join(", ")+".":"All colour settings converted.")+
         " Review the controls and refine before exporting.";
       fail("Lightroom preset imported \u2014 approximate conversion, review before exporting.");
