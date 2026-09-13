@@ -1081,10 +1081,30 @@ function positionWipe(){
 /* ================= curves UI ================= */
 const ccv=$("curves"),cc=ccv.getContext("2d");
 const PAD=10;
-const cx2px=x=>PAD+x*(ccv.width-2*PAD);
-const cy2px=y=>ccv.height-PAD-y*(ccv.height-2*PAD);
-const px2cx=px=>clamp((px-PAD)/(ccv.width-2*PAD));
-const px2cy=py=>clamp((ccv.height-PAD-py)/(ccv.height-2*PAD));
+let curveView={x0:0,x1:1,y0:0,y1:1};
+const cx2px=x=>PAD+(x-curveView.x0)/(curveView.x1-curveView.x0)*(ccv.width-2*PAD);
+const cy2px=y=>ccv.height-PAD-(y-curveView.y0)/(curveView.y1-curveView.y0)*(ccv.height-2*PAD);
+const px2cx=px=>clamp(curveView.x0+(px-PAD)/(ccv.width-2*PAD)*(curveView.x1-curveView.x0));
+const px2cy=py=>clamp(curveView.y0+(ccv.height-PAD-py)/(ccv.height-2*PAD)*(curveView.y1-curveView.y0));
+function clampCurveRange(lo,hi){
+  let size=hi-lo;
+  if(size>1)size=1;
+  if(size<0.02)size=0.02;
+  if(lo<0){lo=0;hi=lo+size;}
+  if(hi>1){hi=1;lo=hi-size;}
+  return[lo,hi];
+}
+function zoomCurves(e){
+  e.preventDefault();
+  const[px,py]=curvePos(e);
+  const cx=px2cx(px),cy=px2cy(py);
+  const factor=e.deltaY<0?0.85:1/0.85;
+  let x0=cx+(curveView.x0-cx)*factor,x1=cx+(curveView.x1-cx)*factor;
+  let y0=cy+(curveView.y0-cy)*factor,y1=cy+(curveView.y1-cy)*factor;
+  [x0,x1]=clampCurveRange(x0,x1);[y0,y1]=clampCurveRange(y0,y1);
+  curveView={x0,x1,y0,y1};
+  drawCurves();
+}
 const chColour={m:"#e8e2d4",r:"#e06a5a",g:"#7ec07a",b:"#6a90e0"};
 let hoverCurveValues=null;
 function drawCurves(){
@@ -1143,6 +1163,7 @@ ccv.addEventListener("dblclick",e=>{
   const[px,py]=curvePos(e),p=nearestPoint(px,py),pts=curves[curveCh];
   if(p&&pts.length>2){curves[curveCh]=pts.filter(q=>q!==p);rebuildCurves();render();pushHistory();}
 });
+ccv.addEventListener("wheel",zoomCurves,{passive:false});
 document.querySelectorAll(".chtabs button").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll(".chtabs button").forEach(x=>x.classList.remove("on"));
   b.classList.add("on");curveCh=b.dataset.ch;drawCurves();
@@ -1191,6 +1212,12 @@ function makeStrip(cvId,arr,n,periodic,bgFn){
     arr[di]=Math.max(-1,Math.min(1,(cv.height/2-py)/(cv.height/2-HP)));render();
   });
   window.addEventListener("pointerup",()=>{if(di>=0){di=-1;pushHistory();}else di=-1;});
+  cv.addEventListener("dblclick",e=>{
+    const[px,py]=pos(e);
+    let best=-1,bd=400;
+    for(let i=0;i<n;i++){const d=(hx(i)-px)**2+(hy(arr[i])-py)**2;if(d<bd){bd=d;best=i;}}
+    if(best>=0){arr[best]=0;render();pushHistory();}
+  });
   return draw;
 }
 const drawHueHue=makeStrip("huecv",hueShift,HUEN,true,u=>`hsl(${u*360} 60% 38%)`);
@@ -1324,6 +1351,12 @@ sliders.forEach(id=>{
     render();
   });
   el.addEventListener("change",pushHistory);
+  el.addEventListener("dblclick",()=>{
+    const v=DEF[id]||0;
+    el.value=v;state[id]=v;
+    if(num)num.value=v;
+    render();pushHistory();
+  });
   if(num){
     const commit=()=>{
       let v=parseFloat(num.value);
